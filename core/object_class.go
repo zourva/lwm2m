@@ -1,6 +1,6 @@
 package core
 
-// ObjectID represents an LwM2M Object Type
+// ObjectID represents a LwM2M Object Type
 type ObjectID = uint16
 
 const (
@@ -20,10 +20,10 @@ const (
 	OmaObject5GNRConn       ObjectID = 27
 )
 
-// ObjectClass describes an LwM2M Object depicted in
+// Object describes a LwM2M Object depicted in
 // OMA-TS-LightweightM2M_Core-V1_2_1-20221209-A
 // Appendix D.1 Object Template.
-type ObjectClass interface {
+type Object interface {
 	Name() string
 	Id() ObjectID
 	Version() string
@@ -34,7 +34,7 @@ type ObjectClass interface {
 	Description() string
 
 	// Resources returns all resource classes
-	// defined for this ObjectClass.
+	// defined for this Object.
 	Resources() []Resource
 
 	// Resource returns the resource class
@@ -42,7 +42,8 @@ type ObjectClass interface {
 	Resource(n ResourceID) Resource
 }
 
-type ObjectClassImpl struct {
+// ObjectClass implements Object.
+type ObjectClass struct {
 	id           ObjectID
 	name         string
 	version      string //the 1st version must be "1.0"
@@ -55,79 +56,79 @@ type ObjectClassImpl struct {
 	resources []Resource
 }
 
-func (o *ObjectClassImpl) SetId(id ObjectID) {
+func (o *ObjectClass) SetId(id ObjectID) {
 	o.id = id
 }
 
-func (o *ObjectClassImpl) SetName(name string) {
+func (o *ObjectClass) SetName(name string) {
 	o.name = name
 }
 
-func (o *ObjectClassImpl) SetVersion(version string) {
+func (o *ObjectClass) SetVersion(version string) {
 	o.version = version
 }
 
-func (o *ObjectClassImpl) SetMultiple(multiple bool) {
+func (o *ObjectClass) SetMultiple(multiple bool) {
 	o.multiple = multiple
 }
 
-func (o *ObjectClassImpl) SetMandatory(mandatory bool) {
+func (o *ObjectClass) SetMandatory(mandatory bool) {
 	o.mandatory = mandatory
 }
 
-func (o *ObjectClassImpl) SetLwM2MVersion(lwM2MVersion string) {
+func (o *ObjectClass) SetLwM2MVersion(lwM2MVersion string) {
 	o.lwM2MVersion = lwM2MVersion
 }
 
-func (o *ObjectClassImpl) SetUrn(urn string) {
+func (o *ObjectClass) SetUrn(urn string) {
 	o.urn = urn
 }
 
-func (o *ObjectClassImpl) SetDescription(description string) {
+func (o *ObjectClass) SetDescription(description string) {
 	o.description = description
 }
 
-func (o *ObjectClassImpl) SetResources(r []Resource) {
+func (o *ObjectClass) SetResources(r []Resource) {
 	o.resources = r
 }
 
-func (o *ObjectClassImpl) Name() string {
+func (o *ObjectClass) Name() string {
 	return o.name
 }
 
-func (o *ObjectClassImpl) Id() ObjectID {
+func (o *ObjectClass) Id() ObjectID {
 	return o.id
 }
 
-func (o *ObjectClassImpl) Version() string {
+func (o *ObjectClass) Version() string {
 	return o.version
 }
 
-func (o *ObjectClassImpl) LwM2MVersion() string {
+func (o *ObjectClass) LwM2MVersion() string {
 	return o.lwM2MVersion
 }
 
-func (o *ObjectClassImpl) URN() string {
+func (o *ObjectClass) URN() string {
 	return o.urn
 }
 
-func (o *ObjectClassImpl) Multiple() bool {
+func (o *ObjectClass) Multiple() bool {
 	return o.multiple
 }
 
-func (o *ObjectClassImpl) Mandatory() bool {
+func (o *ObjectClass) Mandatory() bool {
 	return o.mandatory
 }
 
-func (o *ObjectClassImpl) Description() string {
+func (o *ObjectClass) Description() string {
 	return o.description
 }
 
-func (o *ObjectClassImpl) Resources() []Resource {
+func (o *ObjectClass) Resources() []Resource {
 	return o.resources
 }
 
-func (o *ObjectClassImpl) Resource(n ResourceID) Resource {
+func (o *ObjectClass) Resource(n ResourceID) Resource {
 	for _, res := range o.resources {
 		if res.Id() == n {
 			return res

@@ -4,9 +4,10 @@ const (
 	defaultLocalAddr  = ":0"
 	defaultServerAddr = "127.0.0.1:5683"
 
-	boostrapUri   = "/bs"
-	registerUri   = "/rd"
-	sendReportUri = "/dp"
+	boostrapUri      = "/bs"
+	bootstrapPackUri = "/bspack"
+	registerUri      = "/rd"
+	sendReportUri    = "/dp"
 )
 
 const (

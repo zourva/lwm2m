@@ -33,9 +33,9 @@ type ReportingServer interface {
 	//  path: provided in request payload, different for each other.
 	CancelObservationComposite() error
 
-	OnNotify() ErrorType
+	OnNotify(value []byte) error
 
-	OnSend() ErrorType
+	OnSend(value []byte) ([]byte, error)
 }
 
 type ReportingClient interface {
@@ -53,5 +53,5 @@ type ReportingClient interface {
 	//  method: POST
 	//  format: LwM2M CBOR, SenML CBOR, SenML JSON
 	//  path: /dp
-	Send(updated *Value) error
+	Send(value []byte) ([]byte, error)
 }

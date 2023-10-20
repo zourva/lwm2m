@@ -24,6 +24,16 @@ type DeviceControlClient interface {
 	//  method: POST
 	//  format: LwM2M CBOR, SenML CBOR, SenML JSON, or TLV
 	//  path: /{Object ID}
+	//  code may be responded:
+	//    2.01 Created "Create" operation is completed successfully
+	//    4.00 Bad Request Target (i.e., Object) already exists or
+	//              Mandatory Resources are not specified or
+	//              Content Format is not specified
+	//    4.01 Unauthorized Access Right Permission Denied
+	//    4.04 Not Found URI of "Create" operation is not found
+	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
+	//    4.06 Not Acceptable The specified Content-Format is not supported
+	//    4.15 Unsupported content format The specified format is not supported
 	OnCreate(oid ObjectID, newValue Value) ErrorType
 
 	// OnRead implements Read operation

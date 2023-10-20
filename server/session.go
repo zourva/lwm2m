@@ -5,7 +5,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
-	"github.com/zourva/lwm2m/preset"
 	"strconv"
 	"strings"
 	"time"
@@ -21,23 +20,29 @@ type RegisteredClient struct {
 
 	// each client has its own enabled objects that are told
 	// to server when the client is registering or updating.
-	objectStore *ObjectStore
-	//enabledObjects map[ObjectID]Object `msgpack:"enabledObjects"`
+	//objectStore ObjectInstanceStore
+
+	registry ObjectRegistry
+
+	// object instance ids when reported or updated
+	instances map[ObjectID]map[InstanceID]RegisteredObject
 
 	messager *Messager
 }
 
 // NewClient creates a new session for a registered client
 // using the given registration information.
-func NewClient(info *RegistrationInfo) *RegisteredClient {
+func NewClient(info *RegistrationInfo, registry ObjectRegistry) *RegisteredClient {
 	session := &RegisteredClient{
-		regInfo: info,
+		regInfo:   info,
+		registry:  registry,
+		instances: make(map[ObjectID]map[InstanceID]RegisteredObject),
 	}
 
 	// predefined object classes
-	factory := NewObjectFactory(NewClassStore(preset.NewOMAObjectInfoProvider()))
-	objectStore := NewObjectStore(nil, factory)
-	session.objectStore = objectStore
+	//reg := NewObjectRegistry(preset.NewOMAObjectClassInfoProvider())
+	//store := NewObjectInstanceStore(reg, nil)
+	//session.objectStore = store
 	session.createObjects(info.ObjectInstances)
 
 	return session
@@ -69,13 +74,13 @@ func (c *RegisteredClient) Update(info *RegistrationInfo) {
 }
 
 //
-//func (c *RegisteredClient) SetObjects(objects map[ObjectID]Object) {
+//func (c *RegisteredClient) SetObjects(objects map[ObjectID]ObjectInstance) {
 //	c.enabledObjects = objects
 //}
 
-// GetObject returns instance 0 of ObjectID.
-func (c *RegisteredClient) GetObject(t ObjectID) Object {
-	return c.objectStore.GetInstance(t, 0)
+// GetObjectClass returns Object class definition for the given id.
+func (c *RegisteredClient) GetObjectClass(t ObjectID) Object {
+	return c.registry.GetClass(t)
 }
 
 func (c *RegisteredClient) Create(oid ObjectID, newValue Value) error {
@@ -85,7 +90,7 @@ func (c *RegisteredClient) Create(oid ObjectID, newValue Value) error {
 func (c *RegisteredClient) Read(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error {
 	uri := c.makeAccessPath(oid, instId, resId, resInstId)
 	mt := coap.MediaTypeTextPlainVndOmaLwm2m
-	if c.GetObject(oid).GetClass().Resource(resId).Multiple() {
+	if c.GetObjectClass(oid).Resource(resId).Multiple() {
 		mt = coap.MediaTypeTlvVndOmaLwm2m
 	}
 
@@ -134,14 +139,15 @@ func (c *RegisteredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid Res
 	return uri
 }
 
-// creates object instances based on paths.
+// creates registered object instances based on paths.
+// from CoaP POST body
+//
+//	</lwm2m>;rt="oma.lwm2m", </lwm2m /1/0>,</lwm2m /1/1>,
+//	</lwm2m /2/0>,</lwm2m /2/1>,</lwm2m /2/2>,</lwm2m/2/3>,
+//	</lwm2m /2/4>,</lwm2m /3/0>,</lwm2m /4/0>,</lwm2m /5>
+//	or
+//	</>;ct=110, </1/0>,</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,</3/0>,</4/0>,</5>
 func (c *RegisteredClient) createObjects(objInstances []*coap.CoreResource) {
-	// from CoaP POST body
-	// </lwm2m>;rt="oma.lwm2m", </lwm2m /1/0>,</lwm2m /1/1>,
-	// </lwm2m /2/0>,</lwm2m /2/1>,</lwm2m /2/2>,</lwm2m/2/3>,
-	// </lwm2m /2/4>,</lwm2m /3/0>,</lwm2m /4/0>,</lwm2m /5>
-	// or
-	// </>;ct=110, </1/0>,</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,</3/0>,</4/0>,</5>
 	for _, o := range objInstances {
 		t := o.Target[1:len(o.Target)]
 
@@ -155,15 +161,20 @@ func (c *RegisteredClient) createObjects(objInstances []*coap.CoreResource) {
 		objectId, _ := strconv.Atoi(sp[0])
 
 		oid := ObjectID(objectId)
-		obj := c.objectStore.CreateInstance(oid)
+
+		// create instance id map if new
+		m, ok := c.instances[oid]
+		if !ok {
+			m = make(map[InstanceID]RegisteredObject)
+		}
 
 		instanceId := 0
 		if len(sp) > 1 {
 			instanceId, _ = strconv.Atoi(sp[1])
 		}
 
-		obj.SetInstanceID(InstanceID(instanceId))
-		c.objectStore.SaveInstance(obj)
+		class := c.registry.GetClass(oid)
+		m[InstanceID(instanceId)] = NewRegisteredObject(class, InstanceID(instanceId))
 	}
 }
 

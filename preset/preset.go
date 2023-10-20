@@ -6,10 +6,17 @@ import (
 	"github.com/zourva/lwm2m/core"
 )
 
-type ObjectClassMap = map[core.ObjectID]core.ObjectClass
+type ObjectClassMap = map[core.ObjectID]core.Object
+
+type ProviderType = int
+
+const (
+	OMAObjects ProviderType = iota
+	IPSOObjects
+)
 
 var oma ObjectClassMap
-var groups map[core.ProviderType]ObjectClassMap
+var groups map[ProviderType]ObjectClassMap
 
 var typeMap = map[string]core.ValueType{
 	"multiple":      core.ValueTypeMultiple,
@@ -39,25 +46,25 @@ var opsMap = map[string]core.OpCode{
 
 func init() {
 	oma = make(ObjectClassMap)
-	groups = map[core.ProviderType]ObjectClassMap{
-		core.OMAObjects: oma,
+	groups = map[ProviderType]ObjectClassMap{
+		OMAObjects: oma,
 	}
 
 	buildPreset()
 }
 
 func buildPreset() {
-	parseObjectClass(securityDescriptor, oma)
-	parseObjectClass(serverDescriptor, oma)
-	parseObjectClass(accessControlDescriptor, oma)
-	parseObjectClass(deviceDescriptor, oma)
-	parseObjectClass(connMonitorDescriptor, oma)
-	parseObjectClass(firmwareUpdateDescriptor, oma)
-	parseObjectClass(locationDescriptor, oma)
-	parseObjectClass(connStatsDescriptor, oma)
+	parseObject(securityDescriptor, oma)
+	parseObject(serverDescriptor, oma)
+	parseObject(accessControlDescriptor, oma)
+	parseObject(deviceDescriptor, oma)
+	parseObject(connMonitorDescriptor, oma)
+	parseObject(firmwareUpdateDescriptor, oma)
+	parseObject(locationDescriptor, oma)
+	parseObject(connStatsDescriptor, oma)
 }
 
-func GetAllPresetClasses(group core.ProviderType) ObjectClassMap {
+func GetAllPreset(group ProviderType) ObjectClassMap {
 	return groups[group]
 }
 
@@ -76,7 +83,7 @@ func optSetBool(val any, setter func(bool)) {
 	setter(realVal)
 }
 
-func parseResourceClass(resources []any) []core.Resource {
+func parseResources(resources []any) []core.Resource {
 	var arrays []core.Resource
 	for _, res := range resources {
 		r := res.(map[string]any)
@@ -96,14 +103,14 @@ func parseResourceClass(resources []any) []core.Resource {
 	return arrays
 }
 
-func parseObjectClass(objJSON string, groupMap map[core.ObjectID]core.ObjectClass) {
+func parseObject(objJSON string, groupMap map[core.ObjectID]core.Object) {
 	var objectMap map[string]any
 	if err := json.Unmarshal([]byte(objJSON), &objectMap); err != nil {
 		log.Errorln("unmarshal object class json failed", err)
 		return
 	}
 
-	class := &core.ObjectClassImpl{}
+	class := &core.ObjectClass{}
 	class.SetId(core.ObjectID(objectMap["Id"].(float64)))
 	optSetString(objectMap["Name"], class.SetName)
 	optSetString(objectMap["Version"], class.SetVersion)
@@ -115,7 +122,7 @@ func parseObjectClass(objJSON string, groupMap map[core.ObjectID]core.ObjectClas
 
 	if objectMap["Resources"] != nil {
 		resources := objectMap["Resources"].([]any)
-		resClasses := parseResourceClass(resources)
+		resClasses := parseResources(resources)
 		class.SetResources(resClasses)
 	}
 

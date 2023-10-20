@@ -62,8 +62,8 @@ func (r *regServerInfo) reset() {
 // Registrar implements application layer logic
 // for client registration procedure at server side.
 type Registrar struct {
-	*meta.StateMachine
-	client *LwM2MClient
+	machine *meta.StateMachine
+	client  *LwM2MClient
 
 	//router interface providing
 	//uplink accessibility
@@ -83,13 +83,13 @@ type Registrar struct {
 
 func NewRegistrar(client *LwM2MClient) *Registrar {
 	s := &Registrar{
-		StateMachine: meta.NewStateMachine("registrar", time.Second),
-		client:       client,
-		messager:     client.messager,
-		location:     "",
-		state:        rsUnknown,
-		nextDelay:    0,
-		current:      0,
+		machine:   meta.NewStateMachine("registrar", time.Second),
+		client:    client,
+		messager:  client.messager,
+		location:  "",
+		state:     rsUnknown,
+		nextDelay: 0,
+		current:   0,
 	}
 
 	s.servers = []*regServerInfo{
@@ -106,7 +106,7 @@ func NewRegistrar(client *LwM2MClient) *Registrar {
 		},
 	}
 
-	s.RegisterStates([]*meta.State{
+	s.machine.RegisterStates([]*meta.State{
 		{Name: initial, Action: s.onInitial},
 		{Name: registering, Action: s.onRegistering},
 		{Name: monitoring, Action: s.onMonitoring},
@@ -115,8 +115,8 @@ func NewRegistrar(client *LwM2MClient) *Registrar {
 		{Name: exiting, Action: s.onExiting},
 	})
 
-	s.SetStartingState(initial)
-	s.SetStoppingState(exiting)
+	s.machine.SetStartingState(initial)
+	s.machine.SetStoppingState(exiting)
 
 	return s
 }
@@ -129,7 +129,7 @@ func (r *Registrar) setState(s regState) {
 	r.state = s
 }
 
-func (r *Registrar) singleObjectInst(oid ObjectID) Object {
+func (r *Registrar) singleObjectInst(oid ObjectID) ObjectInstance {
 	return r.client.store.GetSingleInstance(oid)
 }
 
@@ -146,9 +146,8 @@ func (r *Registrar) sortServers() {
 }
 
 func (r *Registrar) initiateBootstrap() {
-	r.Pause()
-
-	r.client.RequestBootstrap(bsrRegRetryFailure)
+	r.machine.Pause()
+	r.client.RequestBootstrap(bsRegRetryFailure)
 }
 
 func (r *Registrar) currentServer() *regServerInfo {
@@ -178,7 +177,7 @@ func (r *Registrar) onInitial(args any) {
 	// delay for "Initial Registration Delay Timer"
 	r.addDelay(r.currentServer().initRegDelay)
 
-	r.MoveToState(registering)
+	r.machine.MoveToState(registering)
 }
 
 func (r *Registrar) onRegistering(args any) {
@@ -187,7 +186,7 @@ func (r *Registrar) onRegistering(args any) {
 	r.addDelay(r.nextDelay)
 
 	if err := r.Register(); err != nil {
-		log.Errorf("register to %v failed: %v", server, err)
+		log.Errorf("register to %s failed: %v", server.address, err)
 		return
 	}
 
@@ -195,7 +194,7 @@ func (r *Registrar) onRegistering(args any) {
 		log.Infof("register to %s done", server.address)
 
 		if !r.hasMoreServers() {
-			r.MoveToState(monitoring)
+			r.machine.MoveToState(monitoring)
 			return
 		}
 
@@ -245,19 +244,19 @@ func (r *Registrar) onRegistering(args any) {
 func (r *Registrar) onMonitoring(args any) {
 	//TODO: collect changed registration info
 	if r.registrationInfoChanged() {
-		r.MoveToState(updating)
+		r.machine.MoveToState(updating)
 	}
 }
 func (r *Registrar) onUpdating(args any) {
 	if r.updated() {
-		r.MoveToState(monitoring)
+		r.machine.MoveToState(monitoring)
 		log.Infoln("registration info updated")
 	}
 }
 
 func (r *Registrar) onUnregistering(args any) {
 	if r.unregistered() {
-		r.MoveToState(exiting)
+		r.machine.MoveToState(exiting)
 		log.Infoln("client unregistered")
 	}
 }
@@ -367,6 +366,14 @@ func (r *Registrar) Update(params ...any) error {
 	}
 
 	return nil
+}
+
+func (r *Registrar) Start() bool {
+	return r.machine.Startup()
+}
+
+func (r *Registrar) Stop() {
+	r.machine.Shutdown()
 }
 
 func (r *Registrar) buildObjectInstancesList() string {

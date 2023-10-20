@@ -5,10 +5,10 @@ import "errors"
 type ErrorType = string
 
 const (
-	ErrorNone           ErrorType = ""
 	ClientNotFound      ErrorType = "ClientNotFound"
 	OperationNotAllowed ErrorType = "OperationNotAllowed"
 
+	ErrorNone                ErrorType = ""
 	BadRequest               ErrorType = "BadRequest"
 	Unauthorized             ErrorType = "Unauthorized"
 	BadOption                ErrorType = "BadOption"

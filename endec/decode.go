@@ -120,7 +120,7 @@ func DecodeResourceValue(resourceId core.ResourceID, b []byte, resourceDef core.
 	}
 }
 
-// ValueFromBytes extracts value from an lwm2m byte fragment
+// ValueFromBytes extracts value from a lwm2m byte fragment
 func ValueFromBytes(b []byte, v core.ValueType) core.Value {
 	if len(b) == 0 {
 		return core.Empty()

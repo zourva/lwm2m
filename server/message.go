@@ -14,9 +14,9 @@ import (
 type Messager struct {
 	// application layer
 	//bootstrapService
-	registrationService  RegistrationServer
-	deviceControlService DeviceControlServer
-	//reportingService
+	registrationService RegistrationServer
+	reportingService    ReportingServer
+	//m.deviceControlService = NewDeviceControlService(s)
 
 	// session layer
 	coapConn coap.CoapServer
@@ -29,8 +29,9 @@ func NewMessageHandler(s *LwM2MServer) *Messager {
 
 	//s.bootstrapService = NewBootstrapService()
 	m.registrationService = NewRegistrationService(s)
-	m.deviceControlService = NewDeviceControlService(s)
-	//s.reportingService = NewInfoReportingService()
+	m.reportingService = NewInfoReportingService(s)
+
+	//m.deviceControlService = NewDeviceControlService(s)
 
 	return m
 }
@@ -67,7 +68,7 @@ func (m *Messager) onClientRegister(req coap.CoapRequest) coap.CoapResponse {
 		return coap.NewResponseWithMessage(msg)
 	}
 
-	//s.opts.lcHandler.OnClientRegistered()
+	//s.options.lcHandler.OnClientRegistered()
 
 	msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeCreated)
 	msg.AddOption(coap.OptionLocationPath, "rd/"+clientId)
@@ -114,6 +115,28 @@ func (m *Messager) onClientDeregister(req coap.CoapRequest) coap.CoapResponse {
 	m.registrationService.OnDeregister(id)
 
 	msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeDeleted)
+	return coap.NewResponseWithMessage(msg)
+}
+
+// handle request with parameters like:
+//
+//	uri: /dp
+//	body: implementation-specific.
+func (m *Messager) onSendInfo(req coap.CoapRequest) coap.CoapResponse {
+	data := req.GetMessage().Payload.GetBytes()
+	// check resource contained in reported list
+	// check server granted read access
+
+	// commit to application layer
+	rsp, err := m.reportingService.OnSend(data)
+	if err != nil {
+		log.Errorf("error recv client info: %v", err)
+		msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeInternalServerError)
+		return coap.NewResponseWithMessage(msg)
+	}
+
+	msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeContent)
+	msg.Payload = coap.NewBytesPayload(rsp)
 	return coap.NewResponseWithMessage(msg)
 }
 

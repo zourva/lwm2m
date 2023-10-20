@@ -30,14 +30,16 @@ type SessionManager struct {
 	lock      sync.Mutex                   //TODO: optimize with lock-free
 
 	provider GuidProvider
+	registry core.ObjectRegistry
 
 	quit chan bool
 }
 
 func NewSessionManager(server *LwM2MServer) RegisteredClientManager {
 	r := &SessionManager{
-		store:    server.opts.store,
-		provider: server.opts.provider,
+		store:    server.options.store,
+		provider: server.options.provider,
+		registry: server.options.registry,
 
 		sessions:  make(map[string]*RegisteredClient),
 		indexAddr: make(map[string]*RegisteredClient),
@@ -126,7 +128,7 @@ func (r *SessionManager) Create(info *core.RegistrationInfo) *RegisteredClient {
 	defer r.lock.Unlock()
 
 	info.Location = r.genLocation(info.Name)
-	session := NewClient(info)
+	session := NewClient(info, r.registry)
 
 	err := r.store.Save(session.regInfo)
 	if err != nil {
