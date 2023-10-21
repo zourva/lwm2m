@@ -4,7 +4,6 @@ import (
 	"errors"
 	log "github.com/sirupsen/logrus"
 	. "github.com/zourva/lwm2m/core"
-	"github.com/zourva/lwm2m/preset"
 	"github.com/zourva/pareto/box/meta"
 	"strings"
 	"sync/atomic"
@@ -15,7 +14,7 @@ import (
 type Options struct {
 	registry ObjectRegistry
 	store    ObjectInstanceStore
-	//provider      InstanceOperatorProvider
+	//provider      OperatorProvider
 	//storage       InstanceStorageManager
 	serverAddress []string
 	localAddress  string
@@ -220,7 +219,7 @@ func (c *LwM2MClient) onExiting(args any) {
 
 func (c *LwM2MClient) makeDefaults() {
 	if c.options.registry == nil {
-		c.options.registry = NewObjectRegistry(preset.NewOMAObjectInfoProvider())
+		c.options.registry = NewObjectRegistry()
 	}
 
 	if len(c.options.serverAddress) == 0 {
@@ -259,6 +258,18 @@ func (c *LwM2MClient) RequestBootstrap(reason bootstrapReason) {
 	c.bootstrapPending.Store(true)
 }
 
-func (c *LwM2MClient) Name() string {
-	return c.name
+func (c *LwM2MClient) SetOperator(oid ObjectID, operator Operator) {
+	c.store.SetOperator(oid, operator)
+}
+
+func (c *LwM2MClient) SetOperators(operators OperatorMap) {
+	c.store.SetOperators(operators)
+}
+
+func (c *LwM2MClient) EnableInstance(oid ObjectID, ids ...InstanceID) {
+	c.store.EnableInstance(oid, ids...)
+}
+
+func (c *LwM2MClient) EnableInstances(m InstanceIdsMap) {
+	c.store.EnableInstances(m)
 }

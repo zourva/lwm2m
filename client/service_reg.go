@@ -133,10 +133,6 @@ func (r *Registrar) singleObjectInst(oid ObjectID) ObjectInstance {
 	return r.client.store.GetSingleInstance(oid)
 }
 
-func (r *Registrar) resMgr(oid ObjectID) *ResInstManager {
-	return r.singleObjectInst(oid).ResInstManager()
-}
-
 // sort according to Registration Priority Order
 // when multiple lwM2M servers exists.
 func (r *Registrar) sortServers() {
@@ -290,7 +286,7 @@ func (r *Registrar) Register() error {
 
 	// send request
 	req := r.messager.NewConRequestPlainText(coap.Post, registerUri)
-	req.SetURIQuery("ep", r.client.Name())
+	req.SetURIQuery("ep", r.client.name)
 	req.SetURIQuery("lt", defaultLifetime)
 	req.SetURIQuery("lwm2m", lwM2MVersion)
 	req.SetURIQuery("b", BindingModeUDP)
@@ -385,7 +381,7 @@ func (r *Registrar) buildObjectInstancesList() string {
 			buf.WriteString(fmt.Sprintf("</%d>,", oid))
 		} else {
 			for _, inst := range store.GetAll() {
-				buf.WriteString(fmt.Sprintf("</%d/%d>,", oid, inst.InstanceID()))
+				buf.WriteString(fmt.Sprintf("</%d/%d>,", oid, inst.Id()))
 			}
 		}
 	}

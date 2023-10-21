@@ -16,10 +16,10 @@ type BootstrapClient interface {
 	//  path: /bspack?ep={Endpoint Client Name}
 	BootstrapPackRequest() error
 
-	OnBootstrapRead() (*ResourceValue, ErrorType)
+	OnBootstrapRead() (*ResourceField, ErrorType)
 	OnBootstrapWrite() ErrorType
 	OnBootstrapDelete() ErrorType
-	OnBootstrapDiscover() (*ResourceValue, ErrorType)
+	OnBootstrapDiscover() (*ResourceField, ErrorType)
 	OnBootstrapFinish() ErrorType
 
 	BootstrapInfo() *BootstrapInfo

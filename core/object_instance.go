@@ -12,67 +12,89 @@ const (
 //	1 ObjectID -> 1 Object Instance Store
 //	1 Object Instance Store -> 0/1/* Object Instances mapped by id
 type ObjectInstance interface {
-	GetClass() Object
-	ResInstManager() *ResInstManager
-	InstanceID() InstanceID
-	SetInstanceID(id InstanceID)
+	Class() Object
+
+	Id() InstanceID
+
+	SetId(id InstanceID)
+
+	Field(id ResourceID, iid InstanceID) Field
+
+	Fields(id ResourceID) []Field
+
+	AllFields() map[ResourceID][]Field
+
+	// SingleField equals Field(id, 0)
+	SingleField(id ResourceID) Field
 }
 
-type InstanceOperator interface {
-	// Create creates and saves an instance.
-	Create(class Object) ObjectInstance
+type InstanceMap = map[InstanceID]ObjectInstance
+
+type InstanceIdsMap = map[ObjectID][]InstanceID
+
+type objectInstance struct {
+	class  Object     //object class
+	instId InstanceID //object instance id
+
+	resources map[ResourceID][]Field
 }
 
-// InstanceOperatorProvider provides object instance
-// access information for objects defined in ObjectRegistry.
-type InstanceOperatorProvider interface {
-	//// Type returns type of this provider.
-	//Type() ProviderType
-
-	// Get returns the object classes
-	// operators identified by the given id.
-	Get(n ObjectID) InstanceOperator
-
-	Set(n ObjectID, op InstanceOperator)
-
-	// GetAll returns all operators
-	// covered by this provider.
-	GetAll() map[ObjectID]InstanceOperator
-
-	SetAll(all map[ObjectID]InstanceOperator)
-}
-
-type InstanceStorageManager interface {
-	Load() (map[ObjectID]*InstanceManager, error)
-	Flush(objects map[ObjectID]*InstanceManager) error
-}
-
-type ObjectImpl struct {
-	class  Object
-	instId InstanceID
-	resMgr *ResInstManager
-}
-
-func NewObjectImpl(class Object, id InstanceID) *ObjectImpl {
-	return &ObjectImpl{
-		class:  class,
-		instId: id,
-		resMgr: NewResInstManager(),
+func newObjectInstance(class Object, id InstanceID) *objectInstance {
+	return &objectInstance{
+		class:     class,
+		instId:    id,
+		resources: make(map[ResourceID][]Field),
 	}
 }
 
-func (o *ObjectImpl) GetClass() Object {
+func (o *objectInstance) findInstance(instances []Field, iid InstanceID) Field {
+	for _, i := range instances {
+		if i.InstanceID() == iid {
+			return i
+		}
+	}
+
+	return nil
+}
+
+// GetSingleResource returns instance 0 of a resource or nil if not exist.
+func (o *objectInstance) SingleField(id ResourceID) Field {
+	if instances, ok := o.resources[id]; ok {
+		inst := o.findInstance(instances, 0)
+		if inst.Class().Multiple() {
+			//
+		}
+		return inst
+	}
+
+	return nil
+}
+
+// GetResource returns instance of a resource or nil if not exist.
+func (o *objectInstance) Field(id ResourceID, iid InstanceID) Field {
+	if instances, ok := o.resources[id]; ok {
+		return o.findInstance(instances, iid)
+	}
+
+	return nil
+}
+
+func (o *objectInstance) Fields(id ResourceID) []Field {
+	return o.resources[id]
+}
+
+func (o *objectInstance) AllFields() map[ResourceID][]Field {
+	return o.resources
+}
+
+func (o *objectInstance) Class() Object {
 	return o.class
 }
 
-func (o *ObjectImpl) InstanceID() InstanceID {
+func (o *objectInstance) Id() InstanceID {
 	return o.instId
 }
 
-func (o *ObjectImpl) SetInstanceID(id InstanceID) {
+func (o *objectInstance) SetId(id InstanceID) {
 	o.instId = id
-}
-
-func (o *ObjectImpl) ResInstManager() *ResInstManager {
-	return o.resMgr
 }

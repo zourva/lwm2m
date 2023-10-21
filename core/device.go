@@ -42,7 +42,7 @@ type DeviceControlClient interface {
 	//        /{Object ID}/{Object Instance ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}/{Resource Instance ID}
-	OnRead(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) (*ResourceValue, ErrorType)
+	OnRead(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) (*ResourceField, ErrorType)
 
 	// OnWrite implements Write operation
 	//  method: POST/PUT

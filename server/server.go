@@ -4,7 +4,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
-	"github.com/zourva/lwm2m/preset"
 )
 
 const (
@@ -138,7 +137,7 @@ func (s *LwM2MServer) makeDefaults() {
 	}
 
 	if s.options.registry == nil {
-		s.options.registry = NewObjectRegistry(preset.NewOMAObjectInfoProvider())
+		s.options.registry = NewObjectRegistry()
 	}
 
 	if s.options.store == nil {

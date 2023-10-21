@@ -58,7 +58,7 @@ func NewMessager(c *LwM2MClient) *MessagerClient {
 	m := &MessagerClient{
 		mute:     false,
 		state:    disconnected,
-		coapConn: coap.NewServer(c.Name(), c.options.localAddress, c.options.serverAddress[0]),
+		coapConn: coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0]),
 	}
 
 	m.deviceCtrlDelegator = c.controller

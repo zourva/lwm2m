@@ -80,7 +80,7 @@ func (c *RegisteredClient) Update(info *RegistrationInfo) {
 
 // GetObjectClass returns Object class definition for the given id.
 func (c *RegisteredClient) GetObjectClass(t ObjectID) Object {
-	return c.registry.GetClass(t)
+	return c.registry.GetObject(t)
 }
 
 func (c *RegisteredClient) Create(oid ObjectID, newValue Value) error {
@@ -173,19 +173,19 @@ func (c *RegisteredClient) createObjects(objInstances []*coap.CoreResource) {
 			instanceId, _ = strconv.Atoi(sp[1])
 		}
 
-		class := c.registry.GetClass(oid)
+		class := c.registry.GetObject(oid)
 		m[InstanceID(instanceId)] = NewRegisteredObject(class, InstanceID(instanceId))
 	}
 }
 
-//func (c *RegisteredClient) ReadResource(obj ObjectID, objInst InstanceID, res ResourceID) (Value, error) {
+//func (c *RegisteredClient) ReadResource(obj ObjectID, objInst Id, res ResourceID) (Value, error) {
 //	clientAddr, _ := net.ResolveUDPAddr("udp", c.Address())
 //
 //	uri := fmt.Sprintf("/%d/%d/%d", obj, objInst, res)
 //	req := coap.NewRequest(coap.MessageConfirmable, coap.Get, coap.GenerateMessageID())
 //	req.SetRequestURI(uri)
 //
-//	resourceDefinition := c.GetObject(obj).GetClass().Resource(res)
+//	resourceDefinition := c.GetObject(obj).Class().Resource(res)
 //	if resourceDefinition.Multiple() {
 //		req.SetMediaType(coap.MediaTypeTlvVndOmaLwm2m)
 //	} else {

@@ -97,10 +97,10 @@ func DecodeResourceValue(resourceId core.ResourceID, b []byte, resourceDef core.
 				bytesLeft = bytesLeft[actualValueLength:]
 			}
 
-			var decodedValues []*core.ResourceValue
+			var decodedValues []*core.ResourceField
 			for _, r := range resourceBytes {
 				v, _ := DecodeResourceValue(identifier, r, resourceDef)
-				decodedValues = append(decodedValues, v.(*core.ResourceValue))
+				decodedValues = append(decodedValues, v.(*core.ResourceField))
 			}
 
 			return core.NewMultipleResourceValue(identifier, decodedValues), nil
@@ -113,10 +113,10 @@ func DecodeResourceValue(resourceId core.ResourceID, b []byte, resourceDef core.
 			valueOffset += valueTypeLength
 
 			bytesValue := b[valueOffset:]
-			return core.NewResourceValue(resourceId, ValueFromBytes(bytesValue, resourceDef.Type())), nil
+			return core.NewResourceField(resourceId, ValueFromBytes(bytesValue, resourceDef.Type())), nil
 		}
 	} else {
-		return core.NewResourceValue(resourceId, ValueFromBytes(b, resourceDef.Type())), nil
+		return core.NewResourceField(resourceId, ValueFromBytes(b, resourceDef.Type())), nil
 	}
 }
 

@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var deviceDescriptor = `{
+var DeviceDescriptor = `{
       "Id": 3,
       "Name": "Device",
       "Multiple": false,

@@ -36,7 +36,7 @@ func (d *DeviceController) OnCreate(oid core.ObjectID, newValue core.Value) core
 	panic("implement me")
 }
 
-func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) (*core.ResourceValue, core.ErrorType) {
+func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) (*core.ResourceField, core.ErrorType) {
 	//TODO implement me
 	panic("implement me")
 }

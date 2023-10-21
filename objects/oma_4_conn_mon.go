@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var connMonitorDescriptor = `{
+var ConnMonitorDescriptor = `{
       "Id": 4,
       "Name": "Connectivity Monitoring",
       "Multiple": false,

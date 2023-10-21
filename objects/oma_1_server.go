@@ -1,4 +1,4 @@
-package preset
+package objects
 
 var serverDescriptor = `{
       "Id": 1,

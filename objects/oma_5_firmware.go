@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var firmwareUpdateDescriptor = `{
+var FirmwareUpdateDescriptor = `{
       "Id": 5,
       "Name": "Firmware Update",
       "Multiple": false,

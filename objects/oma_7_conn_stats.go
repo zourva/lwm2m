@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var connStatsDescriptor = `{
+var ConnStatsDescriptor = `{
       "Id": 7,
       "Name": "Connectivity Statistics",
       "Multiple": false,

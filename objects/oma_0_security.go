@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var securityDescriptor = `{
+var SecurityDescriptor = `{
       "Id": 0,
       "Name": "LwM2M Security",
       "Multiple": true,

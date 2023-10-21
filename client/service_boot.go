@@ -48,7 +48,7 @@ func (r *Bootstrapper) BootstrapRequest() error {
 	r.setState(bsBootstrapping)
 
 	req := r.messager.NewConRequestPlainText(coap.Post, boostrapUri)
-	req.SetURIQuery("ep", r.client.Name())
+	req.SetURIQuery("ep", r.client.name)
 	rsp, err := r.messager.SendRequest(req)
 	if err != nil {
 		log.Errorln("send bootstrap request failed:", err)
@@ -79,7 +79,7 @@ func (r *Bootstrapper) BootstrapRequest() error {
 //	 5.01 Not Implemented The operation is not implemented.
 func (r *Bootstrapper) BootstrapPackRequest() error {
 	req := r.messager.NewConRequestPlainText(coap.Get, bootstrapPackUri)
-	req.SetURIQuery("ep", r.client.Name())
+	req.SetURIQuery("ep", r.client.name)
 	rsp, err := r.messager.SendRequest(req)
 	if err != nil {
 		log.Errorln("bootstrap pack request failed:", err)
@@ -95,7 +95,7 @@ func (r *Bootstrapper) BootstrapPackRequest() error {
 	return errors.New(rsp.GetMessage().GetCodeString())
 }
 
-func (r *Bootstrapper) OnBootstrapRead() (*core.ResourceValue, core.ErrorType) {
+func (r *Bootstrapper) OnBootstrapRead() (*core.ResourceField, core.ErrorType) {
 	//TODO implement me
 	//codes may respond:
 	//2.05 Content "Read" operation is completed successfully
@@ -124,7 +124,7 @@ func (r *Bootstrapper) OnBootstrapDelete() core.ErrorType {
 	panic("implement me")
 }
 
-func (r *Bootstrapper) OnBootstrapDiscover() (*core.ResourceValue, core.ErrorType) {
+func (r *Bootstrapper) OnBootstrapDiscover() (*core.ResourceField, core.ErrorType) {
 	//TODO implement me
 	//codes may respond:
 	//2.05 Content "Discover" operation is completed successfully

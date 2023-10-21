@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var accessControlDescriptor = `{
+var AccessControlDescriptor = `{
       "Id": 2,
       "Name": "LwM2M Access Control",
       "Multiple": true,

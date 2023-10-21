@@ -57,8 +57,8 @@ func NewRegisteredObject(class Object, oiId InstanceID) RegisteredObject {
 //}
 //
 //func (f *DefaultObjectFactory) Create(id ObjectID) ObjectInstance {
-//	class := f.classStore.GetClass(id)
-//	return NewObjectImpl(class, id)
+//	class := f.classStore.Class(id)
+//	return newObjectInstance(class, id)
 //}
 //
 //func (f *DefaultObjectFactory) ClassStore() ObjectRegistry {

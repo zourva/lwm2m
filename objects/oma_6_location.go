@@ -1,6 +1,6 @@
-package preset
+package objects
 
-var locationDescriptor = `{
+var LocationDescriptor = `{
       "Id": 6,
       "Name": "Location",
       "Multiple": false,

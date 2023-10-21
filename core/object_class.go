@@ -33,13 +33,17 @@ type Object interface {
 	Mandatory() bool
 	Description() string
 
-	// Resources returns all resource classes
+	// Resources returns all resource fields
 	// defined for this Object.
 	Resources() []Resource
 
-	// Resource returns the resource class
+	// Resource returns the resource field
 	// identified by the given id.
 	Resource(n ResourceID) Resource
+
+	// Operator returns operators can be
+	// applied against those resource fields.
+	Operator() Operator
 }
 
 // ObjectClass implements Object.
@@ -54,6 +58,9 @@ type ObjectClass struct {
 	description  string
 
 	resources []Resource
+
+	// delayed initialization
+	operator Operator
 }
 
 func (o *ObjectClass) SetId(id ObjectID) {
@@ -135,4 +142,8 @@ func (o *ObjectClass) Resource(n ResourceID) Resource {
 		}
 	}
 	return nil
+}
+
+func (o *ObjectClass) Operator() Operator {
+	return o.operator
 }
