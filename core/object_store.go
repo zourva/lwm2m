@@ -31,7 +31,7 @@ type ObjectInstanceStore interface {
 	SetOperator(id ObjectID, operator Operator)
 
 	CreateInstance(oid ObjectID) ObjectInstance
-	GetAllInstances() map[ObjectID]*InstanceManager
+	GetInstanceManagers() map[ObjectID]*InstanceManager
 	GetInstances(id ObjectID) InstanceMap
 
 	// GetInstance returns instance of an object
@@ -66,21 +66,22 @@ func NewObjectInstanceStore(r ObjectRegistry) ObjectInstanceStore {
 	}
 
 	os := &objectInstanceStore{
-		registry: r,
-		objects:  make(map[ObjectID]*InstanceManager),
+		registry:  r,
+		enabled:   make(InstanceIdsMap),
+		operators: make(OperatorMap),
+		managers:  make(map[ObjectID]*InstanceManager),
 	}
 
 	return os
 }
 
 type objectInstanceStore struct {
-	registry ObjectRegistry
-	storage  InstanceStorageManager
+	registry  ObjectRegistry
+	managers  map[ObjectID]*InstanceManager
+	operators OperatorMap    //operators bound
+	enabled   InstanceIdsMap //instances enabled
 
-	operators OperatorMap
-	objects   map[ObjectID]*InstanceManager
-
-	preset InstanceIdsMap
+	storage InstanceStorageManager
 }
 
 func (s *objectInstanceStore) SetObjectRegistry(r ObjectRegistry) {
@@ -103,9 +104,9 @@ func (s *objectInstanceStore) SetOperators(operators OperatorMap) {
 }
 
 func (s *objectInstanceStore) EnableInstance(oid ObjectID, ids ...InstanceID) {
-	list, ok := s.preset[oid]
+	list, ok := s.enabled[oid]
 	if !ok {
-		s.preset[oid] = append(s.preset[oid], ids...)
+		s.enabled[oid] = append(s.enabled[oid], ids...)
 	}
 
 	s.mergeList(list, ids)
@@ -117,14 +118,14 @@ func (s *objectInstanceStore) EnableInstances(mapIds InstanceIdsMap) {
 	}
 }
 
-func (s *objectInstanceStore) GetAllInstances() map[ObjectID]*InstanceManager {
-	return s.objects
+func (s *objectInstanceStore) GetInstanceManagers() map[ObjectID]*InstanceManager {
+	return s.managers
 }
 
 // GetInstances returns instances of an object
 // class or nil if not exist.
 func (s *objectInstanceStore) GetInstances(id ObjectID) InstanceMap {
-	if v, ok := s.objects[id]; ok {
+	if v, ok := s.managers[id]; ok {
 		return v.instances
 	}
 
@@ -134,7 +135,7 @@ func (s *objectInstanceStore) GetInstances(id ObjectID) InstanceMap {
 // GetInstance returns instance of an object
 // class or nil if not exist.
 func (s *objectInstanceStore) GetInstance(oid ObjectID, inst InstanceID) ObjectInstance {
-	return s.objects[oid].Get(inst)
+	return s.managers[oid].Get(inst)
 }
 
 // CreateInstance creates an instance and saved it to the store.
@@ -182,7 +183,7 @@ func (s *objectInstanceStore) Load() error {
 		if load, err := s.storage.Load(); err != nil {
 			return err
 		} else {
-			s.objects = load
+			s.managers = load
 			log.Infoln("objects and instances loaded")
 			return nil
 		}
@@ -200,7 +201,7 @@ func (s *objectInstanceStore) Flush() error {
 		return nil
 	}
 
-	return s.storage.Flush(s.objects)
+	return s.storage.Flush(s.managers)
 }
 
 // LoadExplicit creates object instances
@@ -209,7 +210,7 @@ func (s *objectInstanceStore) loadPreset() error {
 	objectCount := 0
 	instanceCount := 0
 
-	for oid, instances := range s.preset {
+	for oid, instances := range s.enabled {
 		objectCount++
 
 		if len(instances) == 0 {
@@ -222,18 +223,18 @@ func (s *objectInstanceStore) loadPreset() error {
 		}
 	}
 
-	log.Infof("%d preset objects and %d instances spawned",
+	log.Infof("%d preset objects and %d instances loaded",
 		objectCount, instanceCount)
 
 	return nil
 }
 
 func (s *objectInstanceStore) clear() {
-	for object := range s.objects {
-		delete(s.objects, object)
+	for object := range s.managers {
+		delete(s.managers, object)
 	}
 
-	s.objects = make(map[ObjectID]*InstanceManager, 0)
+	s.managers = make(map[ObjectID]*InstanceManager, 0)
 }
 
 func (s *objectInstanceStore) mergeList(dstList, newList []InstanceID) {
@@ -258,6 +259,8 @@ func (s *objectInstanceStore) getOperator(oid ObjectID) Operator {
 type InstanceManager struct {
 	instances InstanceMap
 }
+
+type InstanceMgrMap = map[ObjectID]*InstanceManager
 
 func (i *InstanceManager) Add(id InstanceID, object ObjectInstance) {
 	object.SetId(id)

@@ -104,6 +104,8 @@ func (s *LwM2MServer) Serve() {
 
 	go s.coapConn.Start()
 
+	s.evtMgr.EmitEvent(EventServerStarted)
+
 	log.Infoln("lwm2m server started at", s.coapConn.GetLocalAddress().String())
 }
 
@@ -111,6 +113,8 @@ func (s *LwM2MServer) Serve() {
 func (s *LwM2MServer) Shutdown() {
 	s.coapConn.Stop()
 	//s.ClearSessions()
+
+	s.evtMgr.EmitEvent(EventServerStopped)
 
 	log.Infoln("lwm2m server stopped")
 }

@@ -52,10 +52,28 @@ func (e *BaseEvent) Message() string {
 	return e.msg
 }
 
-func NewBaseEvent(evt EventType, name, msg string) *BaseEvent {
+func optString(opt, def string) string {
+	if len(opt) != 0 {
+		return opt
+	}
+
+	return def
+}
+
+func NewBaseEvent(evt EventType, defName, defMsg string, args ...string) *BaseEvent {
+	name := defName
+	if len(args) >= 1 {
+		name = optString(args[0], defName)
+	}
+
+	msg := defMsg
+	if len(args) >= 2 {
+		msg = optString(args[1], defMsg)
+	}
+
 	return &BaseEvent{
-		name: name,
 		evt:  evt,
+		name: name,
 		msg:  msg,
 	}
 }

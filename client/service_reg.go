@@ -375,7 +375,7 @@ func (r *Registrar) Stop() {
 func (r *Registrar) buildObjectInstancesList() string {
 	var buf bytes.Buffer
 
-	all := r.client.store.GetAllInstances()
+	all := r.client.store.GetInstanceManagers()
 	for oid, store := range all {
 		if store.Empty() {
 			buf.WriteString(fmt.Sprintf("</%d>,", oid))

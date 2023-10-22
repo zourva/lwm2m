@@ -8,7 +8,7 @@ type BootstrappedEvent struct {
 
 func NewBootstrappedEvent(args ...string) Event {
 	return &BootstrappedEvent{
-		BaseEvent: newEvt(EventClientBootstrapped, "bootstrapped", "", args...),
+		BaseEvent: NewBaseEvent(EventClientBootstrapped, "bootstrapped", "", args...),
 	}
 }
 
@@ -18,7 +18,7 @@ type RegisteredEvent struct {
 
 func NewRegisteredEvent(args ...string) Event {
 	return &RegisteredEvent{
-		BaseEvent: newEvt(EventClientRegistered, "registered", "", args...),
+		BaseEvent: NewBaseEvent(EventClientRegistered, "registered", "", args...),
 	}
 }
 
@@ -28,7 +28,7 @@ type RegUpdatedEvent struct {
 
 func NewRegUpdatedEvent(args ...string) Event {
 	return &RegUpdatedEvent{
-		BaseEvent: newEvt(EventClientRegUpdated, "registration updated", "", args...),
+		BaseEvent: NewBaseEvent(EventClientRegUpdated, "registration updated", "", args...),
 	}
 }
 
@@ -38,7 +38,7 @@ type UnregisteredEvent struct {
 
 func NewUnregisteredEvent(args ...string) Event {
 	return &UnregisteredEvent{
-		BaseEvent: newEvt(EventClientUnregistered, "unregistered", "", args...),
+		BaseEvent: NewBaseEvent(EventClientUnregistered, "unregistered", "", args...),
 	}
 }
 
@@ -48,7 +48,7 @@ type DeviceChangedEvent struct {
 
 func NewDeviceChangedEvent(args ...string) Event {
 	return &DeviceChangedEvent{
-		BaseEvent: newEvt(EventClientDevInfoChanged, "device control", "", args...),
+		BaseEvent: NewBaseEvent(EventClientDevInfoChanged, "device control", "", args...),
 	}
 }
 
@@ -58,7 +58,7 @@ type InfoObservedEvent struct {
 
 func NewInfoObservedEvent(args ...string) Event {
 	return &InfoObservedEvent{
-		BaseEvent: newEvt(EventClientObserved, "observe", "", args...),
+		BaseEvent: NewBaseEvent(EventClientObserved, "observe", "", args...),
 	}
 }
 
@@ -68,7 +68,7 @@ type InfoReportedEvent struct {
 
 func NewInfoReportedEvent(args ...string) Event {
 	return &InfoReportedEvent{
-		BaseEvent: newEvt(EventClientReported, "report", "", args...),
+		BaseEvent: NewBaseEvent(EventClientReported, "report", "", args...),
 	}
 }
 
@@ -78,28 +78,6 @@ type AbnormalEvent struct {
 
 func NewAbnormalEvent(args ...string) Event {
 	return &AbnormalEvent{
-		BaseEvent: newEvt(EventClientAbnormal, "abnormal", "", args...),
+		BaseEvent: NewBaseEvent(EventClientAbnormal, "abnormal", "", args...),
 	}
-}
-
-func optString(opt, def string) string {
-	if len(opt) != 0 {
-		return opt
-	}
-
-	return def
-}
-
-func newEvt(evt EventType, defName, defMsg string, args ...string) *BaseEvent {
-	name := defName
-	if len(args) >= 1 {
-		name = optString(args[0], defName)
-	}
-
-	msg := defMsg
-	if len(args) >= 2 {
-		msg = optString(args[1], defMsg)
-	}
-
-	return NewBaseEvent(evt, name, msg)
 }
