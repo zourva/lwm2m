@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// RegisteredClient manages the lifecycle of a client
+// registeredClient manages the lifecycle of a client
 // on server side from register to deregister.
 //
 // NOTE: not goroutine-safe.
-type RegisteredClient struct {
+type registeredClient struct {
 	// registration info of a client.
 	regInfo *RegistrationInfo
 
@@ -32,8 +32,8 @@ type RegisteredClient struct {
 
 // NewClient creates a new session for a registered client
 // using the given registration information.
-func NewClient(info *RegistrationInfo, registry ObjectRegistry) *RegisteredClient {
-	session := &RegisteredClient{
+func NewClient(info *RegistrationInfo, registry ObjectRegistry) RegisteredClient {
+	session := &registeredClient{
 		regInfo:   info,
 		registry:  registry,
 		instances: make(map[ObjectID]map[InstanceID]RegisteredObject),
@@ -48,16 +48,25 @@ func NewClient(info *RegistrationInfo, registry ObjectRegistry) *RegisteredClien
 	return session
 }
 
-func (c *RegisteredClient) Name() string {
+func (c *registeredClient) RegistrationInfo() *RegistrationInfo {
+	return c.regInfo
+}
+
+func (c *registeredClient) Name() string {
 	return c.regInfo.Name
 }
 
-func (c *RegisteredClient) Address() string {
+func (c *registeredClient) Address() string {
 	return c.regInfo.Address
 }
 
-func (c *RegisteredClient) Location() string {
+func (c *registeredClient) Location() string {
 	return c.regInfo.Location
+}
+
+func (c *registeredClient) Timeout() bool {
+	// TODO: configurable session timeout
+	return time.Since(c.regInfo.UpdateTime) > 30*time.Minute
 }
 
 // Update updates parameters defined in
@@ -69,28 +78,28 @@ func (c *RegisteredClient) Location() string {
 //	SMS Number
 //	Objects and Object Instances
 //	Profile ID
-func (c *RegisteredClient) Update(info *RegistrationInfo) {
+func (c *registeredClient) Update(info *RegistrationInfo) {
 	c.regInfo.Update(info)
 }
 
 //
-//func (c *RegisteredClient) SetObjects(objects map[ObjectID]ObjectInstance) {
+//func (c *registeredClient) SetObjects(objects map[ObjectID]ObjectInstance) {
 //	c.enabledObjects = objects
 //}
 
 // GetObjectClass returns Object class definition for the given id.
-func (c *RegisteredClient) GetObjectClass(t ObjectID) Object {
+func (c *registeredClient) GetObjectClass(t ObjectID) Object {
 	return c.registry.GetObject(t)
 }
 
-func (c *RegisteredClient) Create(oid ObjectID, newValue Value) error {
+func (c *registeredClient) Create(oid ObjectID, newValue Value) error {
 	return nil
 }
 
-func (c *RegisteredClient) Read(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error {
-	uri := c.makeAccessPath(oid, instId, resId, resInstId)
+func (c *registeredClient) Read(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error {
+	uri := c.makeAccessPath(oid, oiId, rid, riId)
 	mt := coap.MediaTypeTextPlainVndOmaLwm2m
-	if c.GetObjectClass(oid).Resource(resId).Multiple() {
+	if c.GetObjectClass(oid).Resource(rid).Multiple() {
 		mt = coap.MediaTypeTlvVndOmaLwm2m
 	}
 
@@ -108,23 +117,23 @@ func (c *RegisteredClient) Read(oid ObjectID, instId InstanceID, resId ResourceI
 	return nil
 }
 
-func (c *RegisteredClient) Write(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error {
+func (c *registeredClient) Write(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error {
 	return nil
 }
 
-func (c *RegisteredClient) Delete(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error {
+func (c *registeredClient) Delete(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error {
 	return nil
 }
 
-func (c *RegisteredClient) Execute(oid ObjectID, instId InstanceID, resId ResourceID, args string) error {
+func (c *registeredClient) Execute(oid ObjectID, instId InstanceID, resId ResourceID, args string) error {
 	return nil
 }
 
-func (c *RegisteredClient) Discover(oid ObjectID, instId InstanceID, resId ResourceID, depth int) error {
+func (c *registeredClient) Discover(oid ObjectID, instId InstanceID, resId ResourceID, depth int) error {
 	return nil
 }
 
-func (c *RegisteredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {
+func (c *registeredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {
 	optionIds := []uint16{oiId, rid, riId}
 
 	uri := fmt.Sprintf("/%d", oid)
@@ -147,7 +156,7 @@ func (c *RegisteredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid Res
 //	</lwm2m /2/4>,</lwm2m /3/0>,</lwm2m /4/0>,</lwm2m /5>
 //	or
 //	</>;ct=110, </1/0>,</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,</3/0>,</4/0>,</5>
-func (c *RegisteredClient) createObjects(objInstances []*coap.CoreResource) {
+func (c *registeredClient) createObjects(objInstances []*coap.CoreResource) {
 	for _, o := range objInstances {
 		t := o.Target[1:len(o.Target)]
 
@@ -178,7 +187,7 @@ func (c *RegisteredClient) createObjects(objInstances []*coap.CoreResource) {
 	}
 }
 
-//func (c *RegisteredClient) ReadResource(obj ObjectID, objInst Id, res ResourceID) (Value, error) {
+//func (c *registeredClient) ReadResource(obj ObjectID, objInst Id, res ResourceID) (Value, error) {
 //	clientAddr, _ := net.ResolveUDPAddr("udp", c.Address())
 //
 //	uri := fmt.Sprintf("/%d/%d/%d", obj, objInst, res)
@@ -202,8 +211,3 @@ func (c *RegisteredClient) createObjects(objInstances []*coap.CoreResource) {
 //
 //	return responseValue, nil
 //}
-
-func (c *RegisteredClient) timeout() bool {
-	// TODO: configurable session timeout
-	return time.Since(c.regInfo.UpdateTime) > 30*time.Minute
-}

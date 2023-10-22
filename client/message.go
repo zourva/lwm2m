@@ -23,6 +23,7 @@ const (
 type Messager interface {
 	NewRequest(t uint8, m coap.Code, mt coap.MediaType, uri string) coap.CoapRequest
 	NewConRequestPlainText(method coap.Code, uri string) coap.CoapRequest
+	NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.CoapRequest
 	NewAckPiggyback(coap.CoapRequest, coap.Code, coap.MessagePayload) *coap.Message
 	SendRequest(req coap.CoapRequest) (coap.CoapResponse, error)
 	//SetCallback()
@@ -310,6 +311,12 @@ func (m *MessagerClient) NewAckPiggyback(req coap.CoapRequest, code coap.Code, p
 
 func (m *MessagerClient) NewConRequestPlainText(method coap.Code, uri string) coap.CoapRequest {
 	return m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeTextPlain, uri)
+}
+
+func (m *MessagerClient) NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.CoapRequest {
+	req := m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeOpaqueVndOmaLwm2m, uri)
+	req.SetPayload(payload)
+	return req
 }
 
 func (m *MessagerClient) NewRequest(t uint8, c coap.Code, mt coap.MediaType, uri string) coap.CoapRequest {

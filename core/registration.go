@@ -23,6 +23,17 @@ type RegistrationServer interface {
 	OnDeregister(location string)
 }
 
+type RegisteredClient interface {
+	Name() string
+	Address() string
+	Location() string
+	Timeout() bool
+	Update(info *RegistrationInfo)
+	GetObjectClass(t ObjectID) Object
+	RegistrationInfo() *RegistrationInfo
+	DeviceControlProxy
+}
+
 // RegistrationInfo defines registered client
 // info passed from protocol layer to service layer.
 type RegistrationInfo struct {

@@ -12,6 +12,8 @@ import (
 // Messager encapsulates and hide
 // transport layer details.
 type Messager struct {
+	server *LwM2MServer
+
 	// application layer
 	//bootstrapService
 	registrationService RegistrationServer
@@ -22,16 +24,17 @@ type Messager struct {
 	coapConn coap.CoapServer
 }
 
-func NewMessageHandler(s *LwM2MServer) *Messager {
+func NewMessageHandler(server *LwM2MServer) *Messager {
 	m := &Messager{
-		coapConn: s.coapConn,
+		server:   server,
+		coapConn: server.coapConn,
 	}
 
 	//s.bootstrapService = NewBootstrapService()
-	m.registrationService = NewRegistrationService(s)
-	m.reportingService = NewInfoReportingService(s)
+	m.registrationService = NewRegistrationService(server)
+	m.reportingService = NewInfoReportingService(server)
 
-	//m.deviceControlService = NewDeviceControlService(s)
+	//m.deviceControlService = NewDeviceControlService(server)
 
 	return m
 }
@@ -127,15 +130,24 @@ func (m *Messager) onSendInfo(req coap.CoapRequest) coap.CoapResponse {
 	// check resource contained in reported list
 	// check server granted read access
 
+	// get registered client bound to this info
+	c := m.server.GetClientManager().GetByAddr(req.GetAddress().String())
+	if c == nil {
+		log.Errorf("not registered or address changed, " +
+			"a new registration is needed and the info sent is ignored")
+		msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeUnauthorized)
+		return coap.NewResponseWithMessage(msg)
+	}
+
 	// commit to application layer
-	rsp, err := m.reportingService.OnSend(data)
+	rsp, err := m.reportingService.OnSend(c, data)
 	if err != nil {
 		log.Errorf("error recv client info: %v", err)
 		msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeInternalServerError)
 		return coap.NewResponseWithMessage(msg)
 	}
 
-	msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeContent)
+	msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeChanged)
 	msg.Payload = coap.NewBytesPayload(rsp)
 	return coap.NewResponseWithMessage(msg)
 }

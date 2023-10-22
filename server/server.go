@@ -77,6 +77,9 @@ func New(name string, opts ...Option) *LwM2MServer {
 	return s
 }
 
+type ClientInitiatedRPCHandler = func(c RegisteredClient, data []byte) ([]byte, error)
+type ClientNotificationHandler = func(c RegisteredClient, data []byte) error
+
 type LwM2MServer struct {
 	name    string
 	options *Options
@@ -87,6 +90,9 @@ type LwM2MServer struct {
 	messager *Messager
 
 	evtMgr *EventManager
+
+	onSent     ClientInitiatedRPCHandler
+	onNotified ClientNotificationHandler
 }
 
 func (s *LwM2MServer) Serve() {
@@ -119,7 +125,11 @@ func (s *LwM2MServer) Shutdown() {
 	log.Infoln("lwm2m server stopped")
 }
 
-func (s *LwM2MServer) GetClient(name string) *RegisteredClient {
+func (s *LwM2MServer) GetClientManager() RegisteredClientManager {
+	return s.manager
+}
+
+func (s *LwM2MServer) GetClient(name string) RegisteredClient {
 	return s.manager.Get(name)
 }
 
@@ -127,11 +137,11 @@ func (s *LwM2MServer) OnEvent(et EventType, h EventHandler) {
 	s.evtMgr.AddListener(et, h)
 }
 
-func (s *LwM2MServer) OnReceiveSent(c *RegisteredClient, data []byte) ([]byte, error) {
+func (s *LwM2MServer) OnReceiveSentInfoFromClient(c RegisteredClient, data []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (s *LwM2MServer) OnReceiveNotified(c *RegisteredClient, data []byte) error {
+func (s *LwM2MServer) OnReceiveNotifiedInfoFromClient(c RegisteredClient, data []byte) error {
 	return nil
 }
 

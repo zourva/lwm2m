@@ -1,7 +1,10 @@
 package client
 
 import (
+	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"github.com/zourva/lwm2m/coap"
 	"github.com/zourva/lwm2m/core"
 	"github.com/zourva/pareto/box/meta"
 	"time"
@@ -48,8 +51,20 @@ func (r *InfoReporter) Notify(updated *core.Value) error {
 }
 
 func (r *InfoReporter) Send(value []byte) ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
+	req := r.messager.NewConRequestOpaque(coap.Post, sendReportUri, value)
+	rsp, err := r.messager.SendRequest(req)
+	if err != nil {
+		log.Errorln("send opaque request failed:", err)
+		return nil, err
+	}
+
+	// check response code
+	if rsp.GetMessage().Code == coap.CodeChanged {
+		log.Infoln("send opaque request done")
+		return rsp.GetPayload(), nil
+	}
+
+	return nil, errors.New(rsp.GetMessage().GetCodeString())
 }
 
 var _ core.ReportingClient = &InfoReporter{}

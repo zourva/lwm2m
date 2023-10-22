@@ -1,22 +1,24 @@
 package server
 
+import "github.com/zourva/lwm2m/core"
+
 type LifecycleHandler interface {
-	OnClientRegistered(session *RegisteredClient)
+	OnClientRegistered(c core.RegisteredClient)
 }
 
 type DefaultLifecycleHandler struct {
 	LifecycleHandler
 }
 
-func (a *DefaultLifecycleHandler) OnClientRegistered(session *RegisteredClient) {
+func (a *DefaultLifecycleHandler) OnClientRegistered(session core.RegisteredClient) {
 
 }
 
-func (a *DefaultLifecycleHandler) OnClientUpdated(session *RegisteredClient) {
+func (a *DefaultLifecycleHandler) OnClientUpdated(session core.RegisteredClient) {
 
 }
 
-func (a *DefaultLifecycleHandler) OnClientDeregistered(session *RegisteredClient) {
+func (a *DefaultLifecycleHandler) OnClientDeregistered(session core.RegisteredClient) {
 
 }
 

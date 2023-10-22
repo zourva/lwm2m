@@ -20,11 +20,11 @@ import "github.com/zourva/lwm2m/core"
 // EventType listeners are also supported to acquire client states including
 // bootstrapping results, registration results etc.
 type API interface {
-	GetClient(name string) *RegisteredClient
+	GetClient(name string) core.RegisteredClient
 
 	// OnEvent adds an event listener.
 	OnEvent(et core.EventType, h core.EventHandler)
 
-	OnReceiveSent(c *RegisteredClient, data []byte) ([]byte, error)
-	OnReceiveNotified(c *RegisteredClient, data []byte) error
+	OnReceiveSentInfoFromClient(c core.RegisteredClient, data []byte) ([]byte, error)
+	OnReceiveNotifiedInfoFromClient(c core.RegisteredClient, data []byte) error
 }

@@ -8,11 +8,11 @@ import (
 )
 
 type RegisteredClientManager interface {
-	Create(info *core.RegistrationInfo) *RegisteredClient
+	Create(info *core.RegistrationInfo) core.RegisteredClient
 
-	Get(name string) *RegisteredClient
-	GetByAddr(addr string) *RegisteredClient
-	GetByLocation(location string) *RegisteredClient
+	Get(name string) core.RegisteredClient
+	GetByAddr(addr string) core.RegisteredClient
+	GetByLocation(location string) core.RegisteredClient
 
 	Update(info *core.RegistrationInfo) error
 
@@ -23,11 +23,11 @@ type RegisteredClientManager interface {
 // SessionManager manages client
 // sessions locally.
 type SessionManager struct {
-	sessions  map[string]*RegisteredClient // index ep name -> session
-	indexAddr map[string]*RegisteredClient // index addr -> session
-	indexLoc  map[string]*RegisteredClient // index location -> session
-	store     RegInfoStore                 //registration info store
-	lock      sync.Mutex                   //TODO: optimize with lock-free
+	sessions  map[string]core.RegisteredClient // index ep name -> session
+	indexAddr map[string]core.RegisteredClient // index addr -> session
+	indexLoc  map[string]core.RegisteredClient // index location -> session
+	store     RegInfoStore                     //registration info store
+	lock      sync.Mutex                       //TODO: optimize with lock-free
 
 	provider GuidProvider
 	registry core.ObjectRegistry
@@ -41,9 +41,9 @@ func NewSessionManager(server *LwM2MServer) RegisteredClientManager {
 		provider: server.options.provider,
 		registry: server.options.registry,
 
-		sessions:  make(map[string]*RegisteredClient),
-		indexAddr: make(map[string]*RegisteredClient),
-		indexLoc:  make(map[string]*RegisteredClient),
+		sessions:  make(map[string]core.RegisteredClient),
+		indexAddr: make(map[string]core.RegisteredClient),
+		indexLoc:  make(map[string]core.RegisteredClient),
 		quit:      make(chan bool),
 	}
 
@@ -78,14 +78,14 @@ func (r *SessionManager) removeStale() {
 	defer r.lock.Unlock()
 
 	for _, session := range r.sessions {
-		if session.timeout() {
+		if session.Timeout() {
 			r.delete(session)
 		}
 	}
 }
 
 // this method is not protected, should be guaranteed by callers.
-func (r *SessionManager) delete(session *RegisteredClient) {
+func (r *SessionManager) delete(session core.RegisteredClient) {
 	delete(r.sessions, session.Name())
 	delete(r.indexLoc, session.Location())
 	delete(r.indexAddr, session.Address())
@@ -97,7 +97,7 @@ func (r *SessionManager) genLocation(epName string) string {
 }
 
 // GetByAddr returns session by peer ip:port address.
-func (r *SessionManager) GetByAddr(addr string) *RegisteredClient {
+func (r *SessionManager) GetByAddr(addr string) core.RegisteredClient {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -106,7 +106,7 @@ func (r *SessionManager) GetByAddr(addr string) *RegisteredClient {
 
 // GetByLocation returns session by assigned location.
 // Used when updating or deletion.
-func (r *SessionManager) GetByLocation(location string) *RegisteredClient {
+func (r *SessionManager) GetByLocation(location string) core.RegisteredClient {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -114,7 +114,7 @@ func (r *SessionManager) GetByLocation(location string) *RegisteredClient {
 }
 
 // Get returns session by its endpoint client name.
-func (r *SessionManager) Get(name string) *RegisteredClient {
+func (r *SessionManager) Get(name string) core.RegisteredClient {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -123,14 +123,14 @@ func (r *SessionManager) Get(name string) *RegisteredClient {
 
 // Create creates a new session using the given registration info
 // saves it to the internal store, and establishes related indices.
-func (r *SessionManager) Create(info *core.RegistrationInfo) *RegisteredClient {
+func (r *SessionManager) Create(info *core.RegistrationInfo) core.RegisteredClient {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
 	info.Location = r.genLocation(info.Name)
 	session := NewClient(info, r.registry)
 
-	err := r.store.Save(session.regInfo)
+	err := r.store.Save(session.RegistrationInfo())
 	if err != nil {
 		return nil
 	}
@@ -138,6 +138,8 @@ func (r *SessionManager) Create(info *core.RegistrationInfo) *RegisteredClient {
 	r.sessions[session.Name()] = session
 	r.indexLoc[session.Location()] = session
 	r.indexAddr[session.Address()] = session
+
+	log.Infof("a new client %s registered, location = %s", info.Name, info.Location)
 
 	return session
 }
@@ -161,7 +163,7 @@ func (r *SessionManager) Update(info *core.RegistrationInfo) error {
 
 	session.Update(info)
 
-	if err := r.store.Update(session.regInfo); err != nil {
+	if err := r.store.Update(session.RegistrationInfo()); err != nil {
 		//rollback the index updating ?
 		log.Errorln("update registration info failed:", err)
 		return err
