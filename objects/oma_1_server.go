@@ -1,6 +1,6 @@
 package objects
 
-var serverDescriptor = `{
+var ServerDescriptor = `{
       "Id": 1,
       "Name": "LwM2M Server",
       "Multiple": true,

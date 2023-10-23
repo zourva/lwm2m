@@ -206,7 +206,7 @@ func (c *LwM2MClient) onServicing(args any) {
 
 func (c *LwM2MClient) onExiting(args any) {
 	if err := c.registrar.Deregister(); err != nil {
-		log.Errorln("client unregister failed, will try again:", err)
+		log.Errorln("client unregister failed:", err)
 		return
 	}
 
