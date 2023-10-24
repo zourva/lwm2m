@@ -30,7 +30,7 @@ func (r *ReportingService) CancelObservationComposite() error {
 }
 
 func (r *ReportingService) OnNotify(c core.RegisteredClient, value []byte) error {
-	log.Debugf("receive Notify operation data %d bytes", len(value))
+	log.Tracef("receive Notify operation data %d bytes", len(value))
 
 	if r.server.onSent != nil {
 		return r.server.onNotified(c, value)
@@ -40,7 +40,7 @@ func (r *ReportingService) OnNotify(c core.RegisteredClient, value []byte) error
 }
 
 func (r *ReportingService) OnSend(c core.RegisteredClient, value []byte) ([]byte, error) {
-	log.Debugf("receive Send operation data %d bytes", len(value))
+	log.Tracef("receive Send operation data %d bytes", len(value))
 
 	if r.server.onSent != nil {
 		return r.server.onSent(c, value)

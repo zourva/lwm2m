@@ -25,6 +25,6 @@ type API interface {
 	// OnEvent adds an event listener.
 	OnEvent(et core.EventType, h core.EventHandler)
 
-	OnReceiveSentInfoFromClient(c core.RegisteredClient, data []byte) ([]byte, error)
-	OnReceiveNotifiedInfoFromClient(c core.RegisteredClient, data []byte) error
+	SetInfoSendingCallback(handler ClientInitiatedRPCHandler)
+	SetNotificationCallback(handler ClientNotificationHandler)
 }

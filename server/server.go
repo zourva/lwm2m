@@ -137,12 +137,12 @@ func (s *LwM2MServer) OnEvent(et EventType, h EventHandler) {
 	s.evtMgr.AddListener(et, h)
 }
 
-func (s *LwM2MServer) OnReceiveSentInfoFromClient(c RegisteredClient, data []byte) ([]byte, error) {
-	return nil, nil
+func (s *LwM2MServer) SetInfoSendingCallback(handler ClientInitiatedRPCHandler) {
+	s.onSent = handler
 }
 
-func (s *LwM2MServer) OnReceiveNotifiedInfoFromClient(c RegisteredClient, data []byte) error {
-	return nil
+func (s *LwM2MServer) SetNotificationCallback(handler ClientNotificationHandler) {
+	s.onNotified = handler
 }
 
 func (s *LwM2MServer) makeDefaults() {
