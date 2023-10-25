@@ -143,7 +143,7 @@ func (r *Registrar) sortServers() {
 
 func (r *Registrar) initiateBootstrap() {
 	r.machine.Pause()
-	r.client.RequestBootstrap(bsRegRetryFailure)
+	r.client.requestBootstrap(bsRegRetryFailure)
 }
 
 func (r *Registrar) currentServer() *regServerInfo {

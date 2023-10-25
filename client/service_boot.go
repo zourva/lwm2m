@@ -12,7 +12,8 @@ import (
 type bootstrapReason = int32
 
 const (
-	bsRegRetryFailure bootstrapReason = iota
+	bsInitialBootstrap bootstrapReason = iota
+	bsRegRetryFailure
 )
 
 type bootstrapState = int32
@@ -23,6 +24,9 @@ const (
 	bsBootstrapDone
 )
 
+// Bootstrapper implements the
+// "Client Initiated Bootstrap" mode
+// defined in Bootstrap interface.
 type Bootstrapper struct {
 	client  *LwM2MClient
 	machine *meta.StateMachine
@@ -32,7 +36,8 @@ type Bootstrapper struct {
 	//state tracking
 	state bootstrapState
 
-	bootstrapInfo *core.BootstrapInfo
+	bootSeverBootInfo *core.BootstrapServerBootstrapInfo
+	serverBootInfo    *core.ServerBootstrapInfo
 }
 
 // BootstrapRequest implements BootstrapRequest operation
@@ -142,14 +147,12 @@ func (r *Bootstrapper) OnBootstrapFinish() core.ErrorType {
 	return core.ErrorNone
 }
 
-func (r *Bootstrapper) BootstrapInfo() *core.BootstrapInfo {
-	//TODO implement me
-	panic("implement me")
+func (r *Bootstrapper) BootstrapServerBootstrapInfo() *core.BootstrapServerBootstrapInfo {
+	return r.bootSeverBootInfo
 }
 
-func (r *Bootstrapper) SecurityCredentials() *core.SecurityCredentials {
-	//TODO implement me
-	panic("implement me")
+func (r *Bootstrapper) SetBootstrapServerBootstrapInfo(info *core.BootstrapServerBootstrapInfo) {
+	r.bootSeverBootInfo = info
 }
 
 var _ core.BootstrapClient = &Bootstrapper{}
@@ -160,8 +163,6 @@ func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
 		machine:  meta.NewStateMachine("bootstrapper", time.Second),
 		messager: client.messager,
 	}
-
-	s.bootstrapInfo = &core.BootstrapInfo{}
 
 	s.machine.RegisterStates([]*meta.State{
 		{Name: initial, Action: s.onInitial},

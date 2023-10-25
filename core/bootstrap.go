@@ -22,8 +22,10 @@ type BootstrapClient interface {
 	OnBootstrapDiscover() (*ResourceField, ErrorType)
 	OnBootstrapFinish() ErrorType
 
-	BootstrapInfo() *BootstrapInfo
-	SecurityCredentials() *SecurityCredentials
+	// BootstrapServerBootstrapInfo returns bootstrap information
+	// for the bootstrap server.
+	BootstrapServerBootstrapInfo() *BootstrapServerBootstrapInfo
+	//SecurityCredentials() *SecurityCredentials
 }
 
 type BootstrapServer interface {
@@ -60,23 +62,42 @@ type BootstrapServer interface {
 	BootstrapFinish()
 }
 
-type BootstrapServerAccount struct {
-}
-
-type SecurityCredentials struct {
-}
-
-type ServerAccount struct {
-}
-
-// BootstrapInfo defines bootstrap info.
+// BootstrapServerBootstrapInfo is used by the LwM2M Client to contact the
+// LwM2M BootstrapServer to get the LwM2M Server Bootstrap Information.
 //
 //	The LwM2M Client SHOULD have the LwM2M Bootstrap-Server Bootstrap Information
-//	The LwM2M Client MUST have at most one LwM2M Bootstrap-Server Account
 //	The LwM2M Client MUST have the LwM2M Server Bootstrap Information after the bootstrap sequence
+//	The LwM2M Client MUST have at most one LwM2M Bootstrap-Server Account
+type BootstrapServerBootstrapInfo struct {
+	BootstrapServerAccount *BootstrapServerAccount
+}
+
+// ServerBootstrapInfo
+//
 //	The LwM2M Server Bootstrap Information MUST contain at least one LwM2M Server Account
 //	The LwM2M Client MAY be configured to use one or more LwM2M Server Account(s)
-type BootstrapInfo struct {
-	BootstrapServerAccount *BootstrapServerAccount
-	ServerAccounts         []*ServerAccount
+type ServerBootstrapInfo struct {
+	ActiveServerAccounts []*ServerAccount //accounts configured to use
 }
+
+// BootstrapServerAccount defines LwM2M
+// Security Object Instance with
+// Bootstrap-Server Resource true.
+type BootstrapServerAccount struct {
+	SecurityObjectInstance ObjectInstance
+}
+
+// ServerAccount defines LwM2M Server
+// Object Instance and associated LwM2M
+// Security Object Instance with Bootstrap-Server
+// Resource false.
+type ServerAccount struct {
+	SecurityObjectInstance ObjectInstance
+	ServerObjectInstance   ObjectInstance
+	//potentially OSCORE ObjectInstance
+	//COSE ObjectInstance
+	//MQTT Server Object Instance
+}
+
+//type SecurityCredentials struct {
+//}

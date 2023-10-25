@@ -102,6 +102,7 @@ func (em *EventManager) AddListener(et EventType, h EventHandler) {
 	em.listeners[et] = h
 }
 
+// EmitEvent triggers the callback registered on evt.
 func (em *EventManager) EmitEvent(evt EventType) {
 	if handler, ok := em.listeners[evt]; ok {
 		handler(em.createEvent(evt))

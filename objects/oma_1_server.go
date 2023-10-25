@@ -90,7 +90,7 @@ var ServerDescriptor = `{
         },
         {
           "Id": 9,
-          "Name": "BootstrapRequest Trigger",
+          "Name": "Bootstrap Request Trigger",
           "Operations": "E",
           "Multiple": false,
           "Mandatory": false,

@@ -34,8 +34,8 @@ var SecurityDescriptor = `{
           "Multiple": false,
           "Mandatory": true,
           "ResourceType": "int",
-          "RangeOrEnums": "0-3",
-          "ValueValidator": "NewRangeValidator(0 3)"
+          "RangeOrEnums": "0-4",
+          "ValueValidator": "NewRangeValidator(0 4)"
         },
         {
           "Id": 3,

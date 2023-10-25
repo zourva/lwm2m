@@ -235,6 +235,10 @@ func (c *LwM2MClient) bootstrapRequired() bool {
 	return c.bootstrapPending.Load()
 }
 
+func (c *LwM2MClient) requestBootstrap(reason bootstrapReason) {
+	c.bootstrapPending.Store(true)
+}
+
 // Start runs the client's state-driven loop.
 func (c *LwM2MClient) Start() bool {
 	c.messager.Start()
@@ -254,10 +258,6 @@ func (c *LwM2MClient) OnEvent(et EventType, h EventHandler) {
 	c.evtMgr.AddListener(et, h)
 }
 
-func (c *LwM2MClient) RequestBootstrap(reason bootstrapReason) {
-	c.bootstrapPending.Store(true)
-}
-
 func (c *LwM2MClient) SetOperator(oid ObjectID, operator Operator) {
 	c.store.SetOperator(oid, operator)
 }
@@ -272,4 +272,10 @@ func (c *LwM2MClient) EnableInstance(oid ObjectID, ids ...InstanceID) {
 
 func (c *LwM2MClient) EnableInstances(m InstanceIdsMap) {
 	c.store.EnableInstances(m)
+}
+
+func (c *LwM2MClient) SetBootstrapServerAccount(account *BootstrapServerAccount) {
+	c.bootstrapper.SetBootstrapServerBootstrapInfo(
+		&BootstrapServerBootstrapInfo{BootstrapServerAccount: account},
+	)
 }
