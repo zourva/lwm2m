@@ -77,8 +77,8 @@ func New(name string, opts ...Option) *LwM2MServer {
 	return s
 }
 
-type ClientInitiatedRPCHandler = func(c RegisteredClient, data []byte) ([]byte, error)
-type ClientNotificationHandler = func(c RegisteredClient, data []byte) error
+type ClientRegHandler = func(c RegisteredClient) ([]byte, error)
+type InfoReportHandler = func(c RegisteredClient, data []byte) ([]byte, error)
 
 type LwM2MServer struct {
 	name    string
@@ -91,8 +91,11 @@ type LwM2MServer struct {
 
 	evtMgr *EventManager
 
-	onSent     ClientInitiatedRPCHandler
-	onNotified ClientNotificationHandler
+	onSent         InfoReportHandler
+	onNotified     InfoReportHandler
+	onRegistered   ClientRegHandler
+	onRegUpdated   ClientRegHandler
+	onUnregistered ClientRegHandler
 }
 
 func (s *LwM2MServer) Serve() {
@@ -137,12 +140,24 @@ func (s *LwM2MServer) OnEvent(et EventType, h EventHandler) {
 	s.evtMgr.AddListener(et, h)
 }
 
-func (s *LwM2MServer) SetInfoSendingCallback(handler ClientInitiatedRPCHandler) {
+func (s *LwM2MServer) SetOnInfoSent(handler InfoReportHandler) {
 	s.onSent = handler
 }
 
-func (s *LwM2MServer) SetNotificationCallback(handler ClientNotificationHandler) {
+func (s *LwM2MServer) SetOnInfoNotified(handler InfoReportHandler) {
 	s.onNotified = handler
+}
+
+func (s *LwM2MServer) SetOnClientRegistered(handler ClientRegHandler) {
+	s.onRegistered = handler
+}
+
+func (s *LwM2MServer) SetOnClientRegUpdated(handler ClientRegHandler) {
+	s.onRegUpdated = handler
+}
+
+func (s *LwM2MServer) SetOnClientUnregistered(handler ClientRegHandler) {
+	s.onUnregistered = handler
 }
 
 func (s *LwM2MServer) makeDefaults() {

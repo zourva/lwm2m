@@ -25,6 +25,15 @@ type API interface {
 	// OnEvent adds an event listener.
 	OnEvent(et core.EventType, h core.EventHandler)
 
-	SetInfoSendingCallback(handler ClientInitiatedRPCHandler)
-	SetNotificationCallback(handler ClientNotificationHandler)
+	// SetOnInfoSent sets the callback to be invoked
+	// when info is received from Send operation of reporting interface.
+	SetOnInfoSent(handler InfoReportHandler)
+
+	// SetOnInfoNotified sets the callback to be invoked
+	// when info is received from Notify operation of reporting interface.
+	SetOnInfoNotified(handler InfoReportHandler)
+
+	SetOnClientRegistered(handler ClientRegHandler)
+	SetOnClientRegUpdated(handler ClientRegHandler)
+	SetOnClientUnregistered(handler ClientRegHandler)
 }
