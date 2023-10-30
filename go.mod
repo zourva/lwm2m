@@ -3,6 +3,7 @@ module github.com/zourva/lwm2m
 go 1.20
 
 require (
+	github.com/asdine/storm/v3 v3.2.1
 	github.com/pborman/uuid v1.2.1
 	github.com/redis/go-redis/v9 v9.2.1
 	github.com/sirupsen/logrus v1.9.3
@@ -21,6 +22,5 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.etcd.io/bbolt v1.3.7 // indirect
 	golang.org/x/sys v0.13.0 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
