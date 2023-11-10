@@ -27,7 +27,7 @@ type registeredClient struct {
 	// object instance ids when reported or updated
 	instances map[ObjectID]map[InstanceID]RegisteredObject
 
-	messager *Messager
+	messager *ServerMessager
 }
 
 // NewClient creates a new session for a registered client
@@ -103,7 +103,7 @@ func (c *registeredClient) Read(oid ObjectID, oiId InstanceID, rid ResourceID, r
 		mt = coap.MediaTypeTlvVndOmaLwm2m
 	}
 
-	req := c.messager.NewRequest(coap.MessageConfirmable, coap.Get, coap.GenerateMessageID(), mt, uri)
+	req := c.messager.NewRequest(coap.MessageConfirmable, coap.Get, mt, uri)
 	rsp, err := c.messager.SendRequestToClient(c.Address(), req)
 	if err != nil {
 		log.Errorln("read operation failed:", err)

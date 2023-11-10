@@ -34,7 +34,7 @@ type DeviceControlClient interface {
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
 	//    4.15 Unsupported content format The specified format is not supported
-	OnCreate(oid ObjectID, newValue Value) ErrorType
+	OnCreate(oid ObjectID, newValue Value) error
 
 	// OnRead implements Read operation
 	//  method: GET
@@ -42,7 +42,7 @@ type DeviceControlClient interface {
 	//        /{Object ID}/{Object Instance ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}/{Resource Instance ID}
-	OnRead(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) (*ResourceField, ErrorType)
+	OnRead(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) (*ResourceField, error)
 
 	// OnWrite implements Write operation
 	//  method: POST/PUT
@@ -50,19 +50,19 @@ type DeviceControlClient interface {
 	//  path: /{Object ID}/{Object Instance ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}/{Resource Instance ID}
-	OnWrite(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) ErrorType
+	OnWrite(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) error
 
 	// OnDelete implements Delete operation
 	//  method: DELETE
 	//  path: /{Object ID}/{Object Instance ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}/{Resource Instance ID}
-	OnDelete(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ErrorType
+	OnDelete(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error
 
 	// OnExecute implements Write operation
 	//  method: POST/PUT
 	//  format: none, or text/plain
 	//  path: /{Object ID}/{Object Instance ID}/{Resource ID}
-	OnExecute(oid ObjectID, oiId InstanceID, rid ResourceID, args string) ErrorType
+	OnExecute(oid ObjectID, oiId InstanceID, rid ResourceID, args string) error
 
 	// OnDiscover implements Discover operation
 	//  method: GET
@@ -70,7 +70,7 @@ type DeviceControlClient interface {
 	//        /{Object ID}/{Object Instance ID}<Depth>
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}<Depth>
 	//        Depth: ?depth={Value}
-	OnDiscover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ErrorType
+	OnDiscover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) error
 	//OnReadComposite()
 	//OnWriteComposite()
 	//OnWriteAttributes()

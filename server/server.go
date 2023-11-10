@@ -65,8 +65,8 @@ func New(name string, opts ...Option) *LwM2MServer {
 
 	s.makeDefaults()
 	s.coapConn = coap.NewCoapServer(name, s.options.address)
-	s.manager = NewSessionManager(s)
-	s.messager = NewMessageHandler(s)
+	s.registerManager = NewSessionManager(s)
+	s.messager = NewMessager(s)
 
 	s.evtMgr = NewEventManager()
 	s.evtMgr.RegisterCreator(EventServerStarted, NewServerStartedEvent)
@@ -77,7 +77,8 @@ func New(name string, opts ...Option) *LwM2MServer {
 	return s
 }
 
-type ClientRegHandler = func(c RegisteredClient) ([]byte, error)
+type ClientBootstrapHandler = func(ctx BootstrapContext) error
+type ClientRegHandler = func(info *RegistrationInfo) ([]byte, error)
 type InfoReportHandler = func(c RegisteredClient, data []byte) ([]byte, error)
 
 type LwM2MServer struct {
@@ -86,8 +87,7 @@ type LwM2MServer struct {
 
 	// session layer
 	coapConn coap.CoapServer
-	manager  RegisteredClientManager
-	messager *Messager
+	messager *ServerMessager
 
 	evtMgr *EventManager
 
@@ -96,6 +96,11 @@ type LwM2MServer struct {
 	onRegistered   ClientRegHandler
 	onRegUpdated   ClientRegHandler
 	onUnregistered ClientRegHandler
+
+	onBootstrapInit ClientBootstrapHandler
+	onBootstrapping ClientBootstrapHandler
+
+	registerManager RegisterManager
 }
 
 func (s *LwM2MServer) Serve() {
@@ -105,6 +110,9 @@ func (s *LwM2MServer) Serve() {
 	})
 
 	// register route handlers
+	s.coapConn.Post("/bs", s.messager.onClientBootstrap)
+	s.coapConn.Get("/bspack", s.messager.onClientBootstrapPack)
+
 	s.coapConn.Post("/rd", s.messager.onClientRegister)
 	s.coapConn.Put("/rd/:id", s.messager.onClientUpdate)
 	s.coapConn.Delete("/rd/:id", s.messager.onClientDeregister)
@@ -128,15 +136,15 @@ func (s *LwM2MServer) Shutdown() {
 	log.Infoln("lwm2m server stopped")
 }
 
-func (s *LwM2MServer) GetClientManager() RegisteredClientManager {
-	return s.manager
+func (s *LwM2MServer) GetClientManager() RegisterManager {
+	return s.registerManager
 }
 
 func (s *LwM2MServer) GetClient(name string) RegisteredClient {
-	return s.manager.Get(name)
+	return s.registerManager.Get(name)
 }
 
-func (s *LwM2MServer) OnEvent(et EventType, h EventHandler) {
+func (s *LwM2MServer) Listen(et EventType, h EventHandler) {
 	s.evtMgr.AddListener(et, h)
 }
 
@@ -146,6 +154,14 @@ func (s *LwM2MServer) SetOnInfoSent(handler InfoReportHandler) {
 
 func (s *LwM2MServer) SetOnInfoNotified(handler InfoReportHandler) {
 	s.onNotified = handler
+}
+
+func (s *LwM2MServer) SetOnClientBootstrapInit(handler ClientBootstrapHandler) {
+	s.onBootstrapInit = handler
+}
+
+func (s *LwM2MServer) SetOnClientBootstrapping(handler ClientBootstrapHandler) {
+	s.onBootstrapping = handler
 }
 
 func (s *LwM2MServer) SetOnClientRegistered(handler ClientRegHandler) {

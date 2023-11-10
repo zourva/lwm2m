@@ -89,5 +89,7 @@ func ParseObject(objJSON string) Object {
 		class.SetResources(resClasses)
 	}
 
+	class.SetOperator(NewBaseOperator())
+
 	return class
 }

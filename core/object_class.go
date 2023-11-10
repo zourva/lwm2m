@@ -44,6 +44,7 @@ type Object interface {
 	// Operator returns operators can be
 	// applied against those resource fields.
 	Operator() Operator
+	SetOperator(operator Operator)
 }
 
 // ObjectClass implements Object.
@@ -97,6 +98,11 @@ func (o *ObjectClass) SetDescription(description string) {
 
 func (o *ObjectClass) SetResources(r []Resource) {
 	o.resources = r
+}
+
+func (o *ObjectClass) SetOperator(operator Operator) {
+	o.operator = operator
+	operator.SetClass(o)
 }
 
 func (o *ObjectClass) Name() string {

@@ -24,12 +24,4 @@ type API interface {
 	OnEvent(et core.EventType, h core.EventHandler)
 
 	Send(data []byte) ([]byte, error)
-
-	// SetBootstrapServerAccount set the pre-provisioned bootstrap
-	// server account as depicted:
-	// In order for the LwM2M Client and the LwM2M Bootstrap-Server
-	// to establish a connection on the Bootstrap Interface, either in
-	// Client Initiated Bootstrap mode or in Server Initiated Bootstrap
-	// mode, the LwM2M Client MUST have an LwM2M Bootstrap-Server Account pre-provisioned.
-	SetBootstrapServerAccount(account *core.BootstrapServerAccount)
 }

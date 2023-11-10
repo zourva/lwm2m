@@ -23,7 +23,7 @@ type API interface {
 	GetClient(name string) core.RegisteredClient
 
 	// OnEvent adds an event listener.
-	OnEvent(et core.EventType, h core.EventHandler)
+	Listen(et core.EventType, h core.EventHandler)
 
 	// SetOnInfoSent sets the callback to be invoked
 	// when info is received from Send operation of reporting interface.

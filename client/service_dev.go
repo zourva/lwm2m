@@ -23,7 +23,7 @@ func (d *DeviceController) validateRIID(rid core.ResourceID, riId core.InstanceI
 	return true
 }
 
-func (d *DeviceController) preCheck(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID) core.ErrorType {
+func (d *DeviceController) preCheck(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID) error {
 	//check existence
 
 	//check access control
@@ -31,34 +31,34 @@ func (d *DeviceController) preCheck(oid core.ObjectID, oiId core.InstanceID, rid
 	return core.ErrorNone
 }
 
-func (d *DeviceController) OnCreate(oid core.ObjectID, newValue core.Value) core.ErrorType {
+func (d *DeviceController) OnCreate(oid core.ObjectID, newValue core.Value) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) (*core.ResourceField, core.ErrorType) {
+func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) (*core.ResourceField, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID, newValue core.Value) core.ErrorType {
+func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID, newValue core.Value) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) core.ErrorType {
+func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (d *DeviceController) OnExecute(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, args string) core.ErrorType {
+func (d *DeviceController) OnExecute(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, args string) error {
 	// check if executable
 
 	//TODO implement me
 	panic("implement me")
 }
 
-func (d *DeviceController) OnDiscover(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, depth int) core.ErrorType {
+func (d *DeviceController) OnDiscover(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, depth int) error {
 	//TODO implement me
 	panic("implement me")
 }

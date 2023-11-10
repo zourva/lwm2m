@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,18 +20,22 @@ import (
 // a storage manager to load object instances from or to flush
 // instances to some external storage.
 type ObjectInstanceStore interface {
-	//ObjectRegistry() ObjectRegistry
+	ObjectRegistry() ObjectRegistry
 	//OperatorProvider() OperatorProvider
-	//StorageManager() InstanceStorageManager
-	//SetObjectRegistry(r ObjectRegistry)
-	//SetStorageManager(m InstanceStorageManager)
+	StorageManager() InstanceStorageManager
+	SetObjectRegistry(r ObjectRegistry)
+	SetStorageManager(m InstanceStorageManager)
 
 	EnableInstances(m InstanceIdsMap)
 	EnableInstance(oid ObjectID, ids ...InstanceID)
 	SetOperators(operators OperatorMap)
 	SetOperator(id ObjectID, operator Operator)
 
-	CreateInstance(oid ObjectID) ObjectInstance
+	//SpawnInstance(oid ObjectID) ObjectInstance
+
+	//GetInstanceManager returns the instance manager
+	//for the given object and create a new one if not found.
+	GetInstanceManager(id ObjectID) *InstanceManager
 	GetInstanceManagers() map[ObjectID]*InstanceManager
 	GetInstances(id ObjectID) InstanceMap
 
@@ -52,8 +57,22 @@ type ObjectInstanceStore interface {
 }
 
 type InstanceStorageManager interface {
-	Load() (map[ObjectID]*InstanceManager, error)
-	Flush(objects map[ObjectID]*InstanceManager) error
+	//Open the underlying storage medium.
+	Open() error
+
+	//Close the underlying storage after flushing.
+	Close() error
+
+	//Bind binds with an object instance store, making
+	//itself an underlying physical storage backing the
+	//given store.
+	Bind(store ObjectInstanceStore)
+
+	//Load all instances into a map.
+	Load() error
+
+	//Flush all instances to storage.
+	Flush() error
 }
 
 // NewObjectInstanceStore returns nil if neither a
@@ -66,20 +85,20 @@ func NewObjectInstanceStore(r ObjectRegistry) ObjectInstanceStore {
 	}
 
 	os := &objectInstanceStore{
-		registry:  r,
-		enabled:   make(InstanceIdsMap),
-		operators: make(OperatorMap),
-		managers:  make(map[ObjectID]*InstanceManager),
+		registry: r,
+		enabled:  make(InstanceIdsMap),
+		//operators: make(OperatorMap),
+		managers: make(map[ObjectID]*InstanceManager),
 	}
 
 	return os
 }
 
 type objectInstanceStore struct {
-	registry  ObjectRegistry
-	managers  map[ObjectID]*InstanceManager
-	operators OperatorMap    //operators bound
-	enabled   InstanceIdsMap //instances enabled
+	registry ObjectRegistry
+	managers map[ObjectID]*InstanceManager
+	//operators OperatorMap    //operators bound
+	enabled InstanceIdsMap //instances enabled
 
 	storage InstanceStorageManager
 }
@@ -89,17 +108,24 @@ func (s *objectInstanceStore) SetObjectRegistry(r ObjectRegistry) {
 }
 
 func (s *objectInstanceStore) SetStorageManager(m InstanceStorageManager) {
+	m.Bind(s)
 	s.storage = m
 }
 
 func (s *objectInstanceStore) SetOperator(id ObjectID, operator Operator) {
-	s.operators[id] = operator
+	//s.operators[id] = operator
+	if class := s.registry.GetObject(id); class != nil {
+		class.SetOperator(operator)
+	}
 }
 
 func (s *objectInstanceStore) SetOperators(operators OperatorMap) {
 	// add operators by merge
 	for id, operator := range operators {
-		s.operators[id] = operator
+		if operator == nil { // no overwrite if invalid
+			continue
+		}
+		s.SetOperator(id, operator)
 	}
 }
 
@@ -116,6 +142,24 @@ func (s *objectInstanceStore) EnableInstances(mapIds InstanceIdsMap) {
 	for id, instIds := range mapIds {
 		s.EnableInstance(id, instIds...)
 	}
+}
+
+func (s *objectInstanceStore) ObjectRegistry() ObjectRegistry {
+	return s.registry
+}
+
+func (s *objectInstanceStore) StorageManager() InstanceStorageManager {
+	return s.storage
+}
+
+func (s *objectInstanceStore) GetInstanceManager(id ObjectID) *InstanceManager {
+	im, ok := s.managers[id]
+	if !ok {
+		im = NewInstanceManager()
+		s.managers[id] = im
+	}
+
+	return im
 }
 
 func (s *objectInstanceStore) GetInstanceManagers() map[ObjectID]*InstanceManager {
@@ -138,38 +182,6 @@ func (s *objectInstanceStore) GetInstance(oid ObjectID, inst InstanceID) ObjectI
 	return s.managers[oid].Get(inst)
 }
 
-// CreateInstance creates an instance and saved it to the store.
-func (s *objectInstanceStore) CreateInstance(oid ObjectID) ObjectInstance {
-	class := s.registry.GetObject(oid)
-	operator := s.getOperator(oid)
-	if operator == nil {
-		return nil
-	}
-
-	inst := operator.Construct(class)
-	if inst == nil {
-		log.Warnf("instance creation for object %d failed", oid)
-		return nil
-	}
-
-	return inst
-	//if c, ok := s.objects[class.Id()]; ok {
-	//	c.Add(c.NextId(), inst)
-	//} else {
-	//	newStore := &InstanceManager{
-	//		instances: make(InstanceMap),
-	//	}
-	//
-	//	newStore.Add(newStore.NextId(), inst)
-	//
-	//	s.objects[class.Id()] = newStore
-	//}
-	//
-	//log.Infof("add instance %d for %d-%s",
-	//	inst.Id(), class.Id(), class.Name())
-	//return inst
-}
-
 // GetSingleInstance returns instance 0 of
 // an object class or nil if not exist.
 func (s *objectInstanceStore) GetSingleInstance(oid ObjectID) ObjectInstance {
@@ -180,13 +192,12 @@ func (s *objectInstanceStore) GetSingleInstance(oid ObjectID) ObjectInstance {
 // objects from the built-in object classes.
 func (s *objectInstanceStore) Load() error {
 	if s.storage != nil {
-		if load, err := s.storage.Load(); err != nil {
+		if err := s.storage.Load(); err != nil {
 			return err
-		} else {
-			s.managers = load
-			log.Infoln("objects and instances loaded")
-			return nil
 		}
+
+		log.Infoln("object instances loaded, size:", len(s.managers))
+		return nil
 	}
 
 	s.clear()
@@ -201,7 +212,23 @@ func (s *objectInstanceStore) Flush() error {
 		return nil
 	}
 
-	return s.storage.Flush(s.managers)
+	return s.storage.Flush()
+}
+
+// spawnInstance creates an instance and saved it to the store.
+// When creating, it spawns a new instance first, then
+// invoke the constructor to initialize the instance.
+func (s *objectInstanceStore) spawnInstance(oid ObjectID) ObjectInstance {
+	class := s.registry.GetObject(oid)
+	inst := NewObjectInstance(class)
+	if err := inst.Construct(); err != nil {
+		log.Warnf("instance construction for object %d failed", oid)
+		return nil
+	}
+
+	//log.Infof("add instance %d for %d-%s",
+	//	inst.Id(), class.Id(), class.Name())
+	return inst
 }
 
 // LoadExplicit creates object instances
@@ -219,7 +246,10 @@ func (s *objectInstanceStore) loadPreset() error {
 
 		for range instances {
 			instanceCount++
-			s.CreateInstance(oid)
+			inst := s.spawnInstance(oid)
+			if inst == nil {
+				return errors.New("create instance failed")
+			}
 		}
 	}
 
@@ -247,14 +277,15 @@ func (s *objectInstanceStore) mergeList(dstList, newList []InstanceID) {
 	}
 }
 
-func (s *objectInstanceStore) getOperator(oid ObjectID) Operator {
-	if operator := s.operators[oid]; operator != nil {
-		log.Warnf("instance operator for object %d is not enabled", oid)
-		return operator
-	}
-
-	return nil
-}
+//
+//func (s *objectInstanceStore) getOperator(oid ObjectID) Operator {
+//	if operator := s.operators[oid]; operator != nil {
+//		log.Warnf("instance operator for object %d is not enabled", oid)
+//		return operator
+//	}
+//
+//	return nil
+//}
 
 type InstanceManager struct {
 	instances InstanceMap
@@ -262,9 +293,9 @@ type InstanceManager struct {
 
 type InstanceMgrMap = map[ObjectID]*InstanceManager
 
-func (i *InstanceManager) Add(id InstanceID, object ObjectInstance) {
-	object.SetId(id)
-	i.instances[id] = object
+func (i *InstanceManager) Add( /*id InstanceID,*/ object ObjectInstance) {
+	//object.SetId(id)
+	i.instances[object.Id()] = object
 }
 
 func (i *InstanceManager) Get(id InstanceID) ObjectInstance {
@@ -290,4 +321,10 @@ func (i *InstanceManager) Size() int {
 // allocated from 0.
 func (i *InstanceManager) NextId() InstanceID {
 	return InstanceID(i.Size())
+}
+
+func NewInstanceManager() *InstanceManager {
+	return &InstanceManager{
+		instances: make(InstanceMap),
+	}
 }

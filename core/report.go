@@ -72,17 +72,20 @@ type ReportingServer interface {
 }
 
 type ReportingClient interface {
-	OnObserve(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, attrs map[string]any) ErrorType
-	OnCancelObservation(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ErrorType
-	OnObserveComposite() ErrorType
-	OnCancelObservationComposite() ErrorType
+	// OnObserve implements server side logic of Observe operation defined in coap.
+	// observationId must have the format of /oid/oiid/rid/riid
+	OnObserve(observationId string, attrs map[string]any) error
+	OnCancelObservation(observationId string) error
+	OnObserveComposite() error
+	OnCancelObservationComposite() error
 
 	// Notify implements Notify operation
 	//  method: N/A since it's defined as an Asynchronous Response
 	//  format: LwM2M CBOR, SenML CBOR, SenML JSON
 	//  code may be responded:
 	//    2.05 Content "Notify" operation completed successfully
-	Notify(updated *Value) error
+	// observationId should be one provided by observing client.
+	Notify(observationId string, value []byte) error
 
 	// Send implements Send operation
 	//  method: POST

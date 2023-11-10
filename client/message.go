@@ -2,6 +2,7 @@ package client
 
 import (
 	log "github.com/sirupsen/logrus"
+
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"github.com/zourva/lwm2m/endec"
@@ -17,59 +18,33 @@ const (
 	reconnected
 )
 
-// Messager hides details using coap binding.
-// All the LwM2M operations using CoAP layer
-// MUST be Confirmable CoAP messages, except as follows:
-type Messager interface {
-	NewRequest(t uint8, m coap.Code, mt coap.MediaType, uri string) coap.CoapRequest
-	NewConRequestPlainText(method coap.Code, uri string) coap.CoapRequest
-	NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.CoapRequest
-	NewAckPiggyback(coap.CoapRequest, coap.Code, coap.MessagePayload) *coap.Message
-	SendRequest(req coap.CoapRequest) (coap.CoapResponse, error)
-	//SetCallback()
-}
-
-var errorCodesMapping = map[ErrorType]coap.Code{
-	ErrorNone:                coap.CodeEmpty,
-	BadRequest:               coap.CodeBadRequest,
-	Unauthorized:             coap.CodeUnauthorized,
-	BadOption:                coap.CodeBadOption,
-	Forbidden:                coap.CodeForbidden,
-	Conflict:                 coap.CodeConflict,
-	NotFound:                 coap.CodeNotFound,
-	MethodNotAllowed:         coap.CodeMethodNotAllowed,
-	NotAcceptable:            coap.CodeNotAcceptable,
-	RequestEntityIncomplete:  coap.CodeRequestEntityIncomplete,
-	PreconditionFailed:       coap.CodePreconditionFailed,
-	RequestEntityTooLarge:    coap.CodeRequestEntityTooLarge,
-	UnsupportedContentFormat: coap.CodeUnsupportedContentFormat,
-}
-
 type MessagerClient struct {
-	coapConn coap.CoapServer
-	state    connState
-	mute     bool
+	client *LwM2MClient
+	state  connState
+	mute   bool
 
 	// service layer delegator
 	deviceCtrlDelegator DeviceControlClient
 	bootstrapDelegator  BootstrapClient
+	reporterDelegator   ReportingClient
 }
 
 func NewMessager(c *LwM2MClient) *MessagerClient {
 	m := &MessagerClient{
-		mute:     false,
-		state:    disconnected,
-		coapConn: coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0]),
+		mute:   false,
+		state:  disconnected,
+		client: c,
 	}
 
 	m.deviceCtrlDelegator = c.controller
 	m.bootstrapDelegator = c.bootstrapper
+	m.reporterDelegator = c.reporter
 
 	return m
 }
 
 func (m *MessagerClient) Start() {
-	s := m.coapConn
+	s := m.conn()
 
 	// add a callback to trigger auto registration
 	// procedure when transport layer started.
@@ -78,8 +53,19 @@ func (m *MessagerClient) Start() {
 		log.Infoln("lwm2m client connected")
 	})
 
-	s.OnObserve(func(resource string, msg *coap.Message) {
-		log.Infoln("observe request received for", resource)
+	s.OnObserve(func(observationId string, msg *coap.Message) {
+		log.Infoln("observe request received for", observationId)
+		// TODO: extract attributes
+		m.reporterDelegator.OnObserve(observationId, nil)
+	})
+
+	s.OnObserveCancel(func(observationId string, msg *coap.Message) {
+		log.Infoln("observe request received for", observationId)
+		m.reporterDelegator.OnCancelObservation(observationId)
+	})
+
+	s.OnError(func(err error) {
+		log.Errorln("err received:", err)
 	})
 
 	// for device control interface methods
@@ -104,16 +90,20 @@ func (m *MessagerClient) Start() {
 	s.Start()
 }
 
-func (m *MessagerClient) Pause() {
+func (m *MessagerClient) PauseAcceptRequests() {
 	m.mute = true
 }
 
-func (m *MessagerClient) Resume() {
+func (m *MessagerClient) ResumeAcceptRequests() {
 	m.mute = false
 }
 
 func (m *MessagerClient) muted() bool {
 	return m.mute
+}
+
+func (m *MessagerClient) conn() coap.CoapServer {
+	return m.client.coapConn
 }
 
 func (m *MessagerClient) bootstrapper() BootstrapClient {
@@ -173,10 +163,6 @@ func (m *MessagerClient) getMediaTypeFromValue(v Value) coap.MediaType {
 	}
 }
 
-func (m *MessagerClient) getErrorCode(err ErrorType) coap.Code {
-	return errorCodesMapping[err]
-}
-
 ////// bootstrap procedure handlers
 
 func (m *MessagerClient) onBootstrapRead(req coap.CoapRequest) coap.CoapResponse {
@@ -198,9 +184,8 @@ func (m *MessagerClient) onBootstrapDiscover(req coap.CoapRequest) coap.CoapResp
 func (m *MessagerClient) onBootstrapFinish(req coap.CoapRequest) coap.CoapResponse {
 	log.Debugln("receive bootstrap finish")
 
-	err := m.bootstrapper().OnBootstrapFinish()
-	code := m.getErrorCode(err)
-	msg := m.NewAckPiggyback(req, code, coap.NewEmptyPayload())
+	err := m.bootstrapper().OnFinish()
+	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
 	return coap.NewResponseWithMessage(msg)
 }
@@ -212,9 +197,7 @@ func (m *MessagerClient) onServerCreate(req coap.CoapRequest) coap.CoapResponse 
 
 	objectId := m.getOID(req)
 	err := m.devController().OnCreate(objectId, String(""))
-	code := m.getErrorCode(err)
-
-	msg := m.NewAckPiggyback(req, code, coap.NewEmptyPayload())
+	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
 	log.Debugln("create request done:", msg)
 
@@ -229,16 +212,14 @@ func (m *MessagerClient) onServerRead(req coap.CoapRequest) coap.CoapResponse {
 	rid := m.getRID(req)
 	riId := m.getRIID(req)
 
-	var code coap.Code
 	var payload coap.MessagePayload
-
 	value, err := m.devController().OnRead(oid, oiId, rid, riId)
 	if err == ErrorNone {
 		buf := endec.EncodeValue(rid, value.Class().Multiple(), value)
 		payload = coap.NewBytesPayload(buf)
 	}
 
-	msg := m.NewAckPiggyback(req, code, payload)
+	msg := m.NewAckPiggyback(req, GetErrorCode(err), payload)
 	msg.AddOption(coap.OptionContentFormat, m.getMediaTypeFromValue(value))
 
 	return coap.NewResponseWithMessage(msg)
@@ -253,9 +234,7 @@ func (m *MessagerClient) onServerDelete(req coap.CoapRequest) coap.CoapResponse 
 	riId := m.getRIID(req)
 
 	err := m.devController().OnDelete(oid, oiId, rid, riId)
-	code := m.getErrorCode(err)
-
-	msg := m.NewAckPiggyback(req, code, coap.NewEmptyPayload())
+	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
 	return coap.NewResponseWithMessage(msg)
 }
@@ -273,8 +252,7 @@ func (m *MessagerClient) onServerWrite(req coap.CoapRequest) coap.CoapResponse {
 	riId := m.getRIID(req)
 
 	err := m.devController().OnWrite(oid, oiId, rid, riId, String(""))
-	code := m.getErrorCode(err)
-	msg := m.NewAckPiggyback(req, code, coap.NewEmptyPayload())
+	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
 	return coap.NewResponseWithMessage(msg)
 }
@@ -287,8 +265,7 @@ func (m *MessagerClient) onServerExecute(req coap.CoapRequest) coap.CoapResponse
 	rid := m.getRID(req)
 
 	err := m.devController().OnExecute(oid, oiId, rid, "")
-	code := m.getErrorCode(err)
-	msg := m.NewAckPiggyback(req, code, coap.NewEmptyPayload())
+	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
 	return coap.NewResponseWithMessage(msg)
 }
@@ -327,13 +304,18 @@ func (m *MessagerClient) NewRequest(t uint8, c coap.Code, mt coap.MediaType, uri
 }
 
 func (m *MessagerClient) SendRequest(req coap.CoapRequest) (coap.CoapResponse, error) {
-	rsp, err := m.coapConn.Send(req)
+	rsp, err := m.conn().Send(req)
 	if err != nil {
 		//log.Println(err)
 		return nil, err
 	}
 
 	return rsp, nil
+}
+
+func (m *MessagerClient) SendNotify(observationId string, data []byte) error {
+	m.conn().NotifyChange(observationId, string(data), false)
+	return nil
 }
 
 func (m *MessagerClient) Connected() bool {

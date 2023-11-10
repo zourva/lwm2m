@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -71,7 +72,7 @@ func (v *MultipleValue) Type() ValueType {
 	return ValueTypeMultiple
 }
 
-func (v *MultipleValue) Get() interface{} {
+func (v *MultipleValue) Get() any {
 	return v.values
 }
 
@@ -130,7 +131,7 @@ func (v *IntegerValue) ContainedType() ValueType {
 	return ValueTypeInteger
 }
 
-func (v *IntegerValue) Get() interface{} {
+func (v *IntegerValue) Get() any {
 	return v.value
 }
 
@@ -154,7 +155,7 @@ func (v *TimeValue) ContainedType() ValueType {
 	return ValueTypeTime
 }
 
-func (v *TimeValue) Get() interface{} {
+func (v *TimeValue) Get() any {
 	return v.value
 }
 
@@ -181,7 +182,7 @@ func (v *FloatValue) ContainedType() ValueType {
 	return ValueTypeFloat
 }
 
-func (v *FloatValue) Get() interface{} {
+func (v *FloatValue) Get() any {
 	return v.value
 }
 
@@ -208,7 +209,7 @@ func (v *Float64Value) ContainedType() ValueType {
 	return ValueTypeFloat64
 }
 
-func (v *Float64Value) Get() interface{} {
+func (v *Float64Value) Get() any {
 	return v.value
 }
 
@@ -235,7 +236,7 @@ func (v *BooleanValue) ContainedType() ValueType {
 	return ValueTypeBoolean
 }
 
-func (v *BooleanValue) Get() interface{} {
+func (v *BooleanValue) Get() any {
 	return v.value
 }
 
@@ -266,12 +267,61 @@ func (v *EmptyValue) ContainedType() ValueType {
 	return ValueTypeEmpty
 }
 
-func (v *EmptyValue) Get() interface{} {
+func (v *EmptyValue) Get() any {
 	return ""
 }
 
 func (v *EmptyValue) ToString() string {
 	return ""
+}
+
+type OpaqueValue struct {
+	value []byte
+}
+
+func (o *OpaqueValue) Type() ValueType {
+	return ValueTypeOpaque
+}
+
+func (o *OpaqueValue) ContainedType() ValueType {
+	return ValueTypeOpaque
+}
+
+func (o *OpaqueValue) Get() any {
+	return o.value
+}
+
+func (o *OpaqueValue) ToBytes() []byte {
+	return o.value
+}
+
+func (o *OpaqueValue) ToString() string {
+	return string(o.value)
+}
+
+type ByteValue struct {
+	value byte
+}
+
+func (b *ByteValue) Type() ValueType {
+	return ValueTypeByte
+}
+
+func (b *ByteValue) ContainedType() ValueType {
+	return ValueTypeByte
+}
+
+func (b *ByteValue) Get() any {
+	return b.value
+}
+
+func (b *ByteValue) ToBytes() []byte {
+	var ret []byte
+	return append(ret, b.value)
+}
+
+func (b *ByteValue) ToString() string {
+	return fmt.Sprintf("0x%x", b.value)
 }
 
 func String(v ...string) Value {
@@ -364,6 +414,36 @@ func Boolean(v ...bool) Value {
 	}
 }
 
+func Opaque(v ...[]byte) Value {
+	if len(v) > 1 {
+		var vs []Value
+
+		for _, o := range v {
+			vs = append(vs, Opaque(o))
+		}
+		return Multiple(ValueTypeOpaque, vs...)
+	} else {
+		return &OpaqueValue{
+			value: v[0],
+		}
+	}
+}
+
+func ByteVal(v ...byte) Value {
+	if len(v) > 1 {
+		var vs []Value
+
+		for _, o := range v {
+			vs = append(vs, ByteVal(o))
+		}
+		return Multiple(ValueTypeByte, vs...)
+	} else {
+		return &ByteValue{
+			value: v[0],
+		}
+	}
+}
+
 func Multiple(ct ValueType, v ...Value) Value {
 	return &MultipleValue{
 		values:        v,
@@ -390,7 +470,7 @@ func ValueByType(t ValueType, val []byte) Value {
 	return value
 }
 
-func GetValueByteLength(val interface{}) (uint32, error) {
+func GetValueByteLength(val any) (uint32, error) {
 	if _, ok := val.(int); ok {
 		v := val.(int)
 		if v > 127 || v < -128 {

@@ -1,8 +1,38 @@
 package storage
 
-import "github.com/zourva/lwm2m/core"
+import (
+	"github.com/zourva/lwm2m/core"
+)
 
-type Object struct {
+type ObjectDescriptor struct {
+	PK           int           `storm:"id,increment"` //not used
+	Id           core.ObjectID `storm:"unique"`
+	Name         string
+	Multiple     bool
+	Mandatory    bool
+	Version      string
+	LwM2MVersion string
+	URN          string
+	Resources    []struct {
+		Id             int
+		Name           string
+		Operations     string
+		Multiple       bool
+		Mandatory      bool
+		ResourceType   string
+		RangeOrEnums   string
+		ValueValidator string
+	}
+}
+
+type ObjectRecord struct {
+	Pk     int             `storm:"id,increment"` //not used
+	OId    core.ObjectID   `storm:"index"`
+	OIId   core.InstanceID `storm:"index"`
+	Fields map[core.ResourceID][]core.Field
+}
+
+type DBObject struct {
 	Id           core.ObjectID `storm:"id"`
 	Name         string
 	Multiple     bool
@@ -12,7 +42,7 @@ type Object struct {
 	URN          string
 }
 
-type Resource struct {
+type DBResource struct {
 	Pk           int             `storm:"id,increment"` //not used
 	OId          core.ObjectID   `storm:"index"`
 	Id           core.ResourceID `storm:"index"`
@@ -24,16 +54,16 @@ type Resource struct {
 	RangeOrEnums string
 }
 
-type Instance struct {
+type DBInstance struct {
 	Pk    int             `storm:"id,increment"` //not used
 	OId   core.ObjectID   `storm:"index"`
 	OIId  core.InstanceID `storm:"index"`
 	RId   core.ResourceID `storm:"index"`
 	RIId  core.InstanceID `storm:"index"`
-	Value any             `storm:"value"`
+	Value core.Field
 }
 
-type Observation struct {
+type DBObservation struct {
 	Pk    int `storm:"id,increment"` //not used
 	OId   core.ObjectID
 	OIId  core.InstanceID

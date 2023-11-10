@@ -5,61 +5,73 @@ package core
 // BootstrapClient defines methods for
 // Client Initiated Bootstrap mode.
 type BootstrapClient interface {
-	// BootstrapRequest implements BootstrapRequest operation
+	// Request implements BootstrapRequest operation
 	//  method: POST
 	//  path: /bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
-	BootstrapRequest() error
+	//  code may be responded:
+	//    2.04 Changed. Operation is completed successfully
+	//    4.00 Bad Request. Unknown Endpoint Client Name
+	//    4.15 Unsupported content format. The specified format is not supported
+	Request() error
 
-	// BootstrapPackRequest implements BootstrapPackRequest operation
+	// PackRequest implements BootstrapPackRequest operation
 	//  method: GET
 	//  format: SenML CBOR, SenML JSON, or LwM2M CBOR
 	//  path: /bspack?ep={Endpoint Client Name}
-	BootstrapPackRequest() error
+	//  code may be responded:
+	//    2.05 Content. The response includes the Bootstrap-Pack
+	//    4.00 Bad Request. Undetermined error occurred
+	//    4.01 Unauthorized
+	//    4.04 Not Found
+	//    4.05 Method Not Allowed
+	//    4.06 Not Acceptable
+	//    5.01 Not Implemented
+	PackRequest() error
 
-	OnBootstrapRead() (*ResourceField, ErrorType)
-	OnBootstrapWrite() ErrorType
-	OnBootstrapDelete() ErrorType
-	OnBootstrapDiscover() (*ResourceField, ErrorType)
-	OnBootstrapFinish() ErrorType
+	OnRead() (*ResourceField, error)
+	OnWrite() error
+	OnDelete() error
+	OnDiscover() (*ResourceField, error)
+	OnFinish() error
 
-	// BootstrapServerBootstrapInfo returns bootstrap information
-	// for the bootstrap server.
+	// BootstrapServerBootstrapInfo returns bootstrap
+	// information for the bootstrap server.
 	BootstrapServerBootstrapInfo() *BootstrapServerBootstrapInfo
 	//SecurityCredentials() *SecurityCredentials
 }
 
 type BootstrapServer interface {
-	OnBootstrapRequest()
-	OnBootstrapPackRequest()
+	OnRequest(ep, addr string) error
+	OnPackRequest(ep string) error
 
-	// BootstrapRead implements BootstrapRead operation
-	//  method: GET
-	//  format: TLV, LwM2M CBOR, SenML CBOR or SenML JSON
-	//  path: /{Object ID} in LwM2M 1.1 and thereafter, Object ID MUST be '1'
-	//     (Server Object) or '2' (Access Control Object)
-	BootstrapRead()
-
-	// BootstrapWrite implements BootstrapWrite operation
-	//  method: PUT
-	//  path: /{Object ID}
-	//        /{Object ID}/{Object Instance ID}
-	//        /{Object ID}/{Object Instance ID}/{Resource ID}
-	BootstrapWrite()
-
-	// BootstrapDelete implements BootstrapDelete operation
-	//  method: DELETE
-	//  path: /{Object ID}/{Object Instance ID}
-	BootstrapDelete()
-
-	// BootstrapDiscover implements BootstrapDiscover operation
-	//  method: GET
-	//  path: /{Object ID}
-	BootstrapDiscover()
-
-	// BootstrapFinish implements BootstrapFinish operation
-	//  method: POST
-	//  path: /bs
-	BootstrapFinish()
+	//// Read implements Read operation
+	////  method: GET
+	////  format: TLV, LwM2M CBOR, SenML CBOR or SenML JSON
+	////  path: /{Object ID} in LwM2M 1.1 and thereafter, Object ID MUST be '1'
+	////     (Server Object) or '2' (Access Control Object)
+	//Read(oid ObjectID)
+	//
+	//// Write implements Write operation
+	////  method: PUT
+	////  path: /{Object ID}
+	////        /{Object ID}/{optional Object Instance ID}
+	////        /{Object ID}/{optional Object Instance ID}/{optional Resource ID}
+	//Write(oid ObjectID, oiId InstanceID, rid ResourceID, value Value)
+	//
+	//// Delete implements Delete operation
+	////  method: DELETE
+	////  path: /{Object ID}/{Object Instance ID}
+	//Delete(oid ObjectID, oiId InstanceID)
+	//
+	//// Discover implements Discover operation
+	////  method: GET
+	////  path: /{Object ID}
+	//Discover(oid ObjectID)
+	//
+	//// Finish implements Finish operation
+	////  method: POST
+	////  path: /bs
+	//Finish()
 }
 
 // BootstrapServerBootstrapInfo is used by the LwM2M Client to contact the
@@ -69,6 +81,7 @@ type BootstrapServer interface {
 //	The LwM2M Client MUST have the LwM2M Server Bootstrap Information after the bootstrap sequence
 //	The LwM2M Client MUST have at most one LwM2M Bootstrap-Server Account
 type BootstrapServerBootstrapInfo struct {
+	//pre-provisioned Bootstrap-Server Account
 	BootstrapServerAccount *BootstrapServerAccount
 }
 

@@ -4,11 +4,75 @@ package core
 // can be applied to resources defined
 // in an Object.
 type Operator interface {
-	// Construct creates and saves an instance.
-	Construct(class Object) ObjectInstance
+	// Class returns the class
+	// bounded with this operator.
+	Class() Object
+	SetClass(o Object)
+
+	// constructor and destructor
+
+	Construct(inst ObjectInstance) error //Constructs an instance
+	Destruct(inst ObjectInstance) error  //destruct an instance
+
+	// field operators
+
+	Add(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error
+	Update(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error
+	Get(inst ObjectInstance, rid ResourceID, riId InstanceID) (Field, error)
+	Delete(inst ObjectInstance, rid ResourceID, riId InstanceID) error
+	Execute(inst ObjectInstance, rid ResourceID, riId InstanceID) error
 }
 
 type OperatorMap = map[ObjectID]Operator
+
+// BaseOperator as a base
+// impl of Operator interface.
+type BaseOperator struct {
+	//object class bounded
+	class Object
+}
+
+func (b *BaseOperator) Class() Object {
+	return b.class
+}
+
+func (b *BaseOperator) SetClass(object Object) {
+	b.class = object
+}
+
+func (b *BaseOperator) Construct(inst ObjectInstance) error {
+	return ErrorNone
+}
+
+func (b *BaseOperator) Destruct(inst ObjectInstance) error {
+	return ErrorNone
+}
+
+func (b *BaseOperator) Add(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error {
+	return ErrorNone
+}
+
+func (b *BaseOperator) Update(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error {
+	return ErrorNone
+}
+
+func (b *BaseOperator) Get(inst ObjectInstance, rid ResourceID, riId InstanceID) (Field, error) {
+	return nil, ErrorNone
+}
+
+func (b *BaseOperator) Delete(inst ObjectInstance, id InstanceID, riId InstanceID) error {
+	return ErrorNone
+}
+
+func (b *BaseOperator) Execute(inst ObjectInstance, id InstanceID, riId InstanceID) error {
+	return ErrorNone
+}
+
+var _ Operator = &BaseOperator{}
+
+func NewBaseOperator() *BaseOperator {
+	return &BaseOperator{}
+}
 
 //// OperatorProvider provides an easy
 //// way to set operators.

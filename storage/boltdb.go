@@ -1,80 +1,305 @@
 package storage
 
 import (
+	"encoding/json"
 	"github.com/asdine/storm/v3"
+	"github.com/asdine/storm/v3/q"
 	log "github.com/sirupsen/logrus"
-	"github.com/zourva/lwm2m/core"
+	. "github.com/zourva/lwm2m/core"
+	"github.com/zourva/lwm2m/objects"
 	bolt "go.etcd.io/bbolt"
 	"time"
 )
 
-type BoltDBStorage struct {
-	name string
-	db   *storm.DB
+type DBStorage struct {
+	name  string
+	store ObjectInstanceStore //the store bounded with
+
+	db *storm.DB
 }
 
-func NewBoltDBStorage(name string) *BoltDBStorage {
-	db, err := storm.Open(name,
-		storm.BoltOptions(0755, &bolt.Options{Timeout: 10 * time.Second}))
-	defer db.Close()
-
-	if err != nil {
-		log.Fatalf("open boltdb %s failed: %v", name, err)
-	}
-
-	storage := &BoltDBStorage{
-		db:   db,
+// NewDBStorage pass ":memory:" to use in memory.
+func NewDBStorage(name string) *DBStorage {
+	storage := &DBStorage{
 		name: name,
 	}
 
 	return storage
 }
 
-func (s *BoltDBStorage) getObject(oid core.ObjectID) core.Object {
-	//return core.NewObject()
-	panic("implement me")
-}
+func (s *DBStorage) Open() error {
+	db, err := storm.Open(s.name,
+		storm.BoltOptions(0755, &bolt.Options{Timeout: 10 * time.Second}))
 
-func (s *BoltDBStorage) getResource(oid core.ObjectID, rid core.ResourceID) core.Resource {
-	//return core.NewResource()
-	panic("implement me")
-}
-
-func (s *BoltDBStorage) Load() (map[core.ObjectID]*core.InstanceManager, error) {
-	var all []Instance
-	err := s.db.All(&all)
 	if err != nil {
-		return nil, err
+		log.Errorf("open boltdb %s failed: %v", s.name, err)
+		return err
 	}
 
-	var m = make(map[core.ObjectID]*core.InstanceManager)
-	for _, tuple := range all {
-		im, ok := m[tuple.OId]
-		if !ok {
-			im = core.NewInstanceManager()
-			m[tuple.OId] = im
-		}
+	s.db = db
 
-		instance := im.Get(tuple.OIId)
-		if instance == nil {
-			class := s.getObject(tuple.OId)
-			instance = core.NewObjectInstance(class, tuple.OIId, nil)
-			im.Add(instance)
-		}
-
-		resource := s.getResource(tuple.OId, tuple.RId)
-		// todo: check type
-		f := core.NewResourceField(tuple.RId, core.String(tuple.Value.(string)))
-		if resource.Multiple() {
-			instance.AddField(f)
-		} else {
-			instance.SetSingleField(f)
-		}
+	if err = db.Init(&ObjectDescriptor{}); err != nil {
+		return err
 	}
 
-	return m, nil
+	if err = db.Init(&ObjectRecord{}); err != nil {
+		return err
+	}
+
+	//err = s.ImportPreset()
+	//if err != nil {
+	//	return err
+	//}
+
+	return nil
 }
 
-func (s *BoltDBStorage) Flush(objects map[core.ObjectID]*core.InstanceManager) error {
+func (s *DBStorage) Close() error {
+	if err := s.Flush(); err != nil {
+		return err
+	}
+
+	return s.db.Close()
+}
+
+func (s *DBStorage) Bind(store ObjectInstanceStore) {
+	s.store = store
+}
+
+func (s *DBStorage) Load() error {
+	var all []ObjectRecord
+	if err := s.db.All(&all); err != nil {
+		return err
+	}
+
+	for _, record := range all {
+		instance := s.deserialize(&record)
+		s.store.GetInstanceManager(record.OId).Add(instance)
+	}
+
 	return nil
+}
+
+func (s *DBStorage) Flush() error {
+	return nil
+}
+
+func (s *DBStorage) serialize(instance ObjectInstance) *ObjectRecord {
+	record := &ObjectRecord{
+		OId:    instance.Class().Id() + 1,
+		OIId:   instance.Id() + 1,
+		Fields: instance.AllFields(),
+	}
+
+	return record
+}
+
+func (s *DBStorage) deserialize(record *ObjectRecord) ObjectInstance {
+	registry := s.store.ObjectRegistry()
+	class := registry.GetObject(record.OId)
+	instance := NewObjectInstance(class)
+	instance.SetAllFields(record.Fields)
+	err := instance.Construct()
+	if err != nil {
+		return nil
+	}
+
+	return instance
+}
+
+func (s *DBStorage) getDBObject(oid ObjectID) *DBObject {
+	val := &DBObject{}
+	err := s.db.One("Id", oid, val)
+	if err != nil {
+		log.Errorf("query object %d failed: %v", oid, err)
+		return nil
+	}
+
+	return val
+}
+
+func (s *DBStorage) getDBResource(oid ObjectID, rid ResourceID) *DBResource {
+	val := &DBResource{}
+	query := s.db.Select(q.Eq("OId", oid), q.Eq("Id", rid))
+	err := query.First(val)
+	if err != nil {
+		log.Errorf("query resource %d for object %d failed: %v", oid, rid, err)
+		return nil
+	}
+
+	return val
+}
+
+func (s *DBStorage) getDBResourceInstance(oid ObjectID, oiId InstanceID,
+	rid ResourceID, riId InstanceID) *DBInstance {
+	val := &DBInstance{}
+	query := s.db.Select(q.Eq("OId", oid), q.Eq("OIId", oiId),
+		q.Eq("RId", rid), q.Eq("RIId", riId))
+	err := query.First(val)
+	if err != nil {
+		log.Errorf("query instance for /%d/%d/%d/%d failed: %v", oid, oiId, rid, riId, err)
+		return nil
+	}
+
+	return val
+}
+
+func (s *DBStorage) getDBObservation(oid ObjectID, oiId InstanceID,
+	rid ResourceID, riId InstanceID) *DBObservation {
+	val := &DBObservation{}
+	query := s.db.Select(q.Eq("OId", oid), q.Eq("OIId", oiId),
+		q.Eq("RId", rid), q.Eq("RIId", riId))
+	err := query.First(val)
+	if err != nil {
+		log.Errorf("query observation for /%d/%d/%d/%d failed: %v", oid, oiId, rid, riId, err)
+		return nil
+	}
+
+	return val
+}
+
+func (s *DBStorage) InsertInstanceResources(inst ObjectInstance) error {
+	//tx, err := s.db.Begin(true)
+	//if err != nil {
+	//	log.Errorln("InsertInstanceResources begin transaction failed:", err)
+	//	return InternalServerError
+	//}
+	//defer tx.Rollback()
+	//
+	//for rid, fields := range inst.AllFields() {
+	//	for riId, field := range fields {
+	//		err = s.db.Save(&DBInstance{
+	//			OId:   inst.Class().Id(),
+	//			OIId:  inst.Id(),
+	//			RId:   rid,
+	//			RIId:  InstanceID(riId),
+	//			Value: field,
+	//		})
+	//		if err != nil {
+	//			log.Errorln("InsertInstanceResources save failed:", err)
+	//			return InternalServerError
+	//		}
+	//	}
+	//}
+	//
+	//if err = tx.Commit(); err != nil {
+	//	log.Errorln("InsertInstanceResources commit transaction failed:", err)
+	//	return InternalServerError
+	//}
+
+	return ErrorNone
+}
+
+func (s *DBStorage) DeleteInstanceResources(inst ObjectInstance) error {
+	//tx, err := s.db.Begin(true)
+	//if err != nil {
+	//	log.Errorln("DeleteInstanceResources begin transaction failed:", err)
+	//	return InternalServerError
+	//}
+	//defer tx.Rollback()
+	//
+	//s.db.DeleteStruct()
+	//
+	//if err = tx.Commit(); err != nil {
+	//	log.Errorln("DeleteInstanceResources commit transaction failed:", err)
+	//	return InternalServerError
+	//}
+
+	return ErrorNone
+}
+
+func (s *DBStorage) UpdateResourceInstance() error {
+	return ErrorNone
+}
+
+func (s *DBStorage) ExecuteResourceInstance(id ObjectID, id2 InstanceID, rid ResourceID, id3 InstanceID) error {
+	return ErrorNone
+}
+
+func (s *DBStorage) InsertResourceInstance(inst ObjectInstance) error {
+	return ErrorNone
+}
+
+func (s *DBStorage) DeleteResourceInstance(id ObjectID, id2 InstanceID, rid ResourceID, id3 InstanceID) error {
+	return ErrorNone
+}
+
+func (s *DBStorage) GetObject(id ObjectID) *ObjectDescriptor {
+	var val *ObjectDescriptor
+	err := s.db.One("Id", id, val)
+	if err != nil {
+		return nil
+	}
+
+	return val
+}
+
+func (s *DBStorage) ImportPreset() error {
+	descriptors := objects.GetOMAObjectDescriptors()
+	for _, desc := range descriptors {
+		var od = &ObjectDescriptor{}
+		err := json.Unmarshal([]byte(desc), od)
+		if err != nil {
+			log.Errorln("boltdb import descriptors failed:", err)
+			return err
+		}
+
+		physicalId := od.Id + 1
+		err = s.db.One("Id", physicalId, &ObjectDescriptor{})
+		if err == nil { //exist, skip
+			continue
+		}
+
+		od.Id += 1
+		err = s.db.Save(od)
+		if err != nil {
+			log.Errorln("boltdb import descriptors failed:", err)
+			return err
+		}
+
+		log.Infoln("boltdb imported object", od.Name)
+	}
+
+	return nil
+}
+
+type DBOperator struct {
+	*BaseOperator
+	storage *DBStorage
+}
+
+func (o *DBOperator) Construct(inst ObjectInstance) error {
+	return o.storage.InsertInstanceResources(inst)
+}
+
+func (o *DBOperator) Destruct(inst ObjectInstance) error {
+	return o.storage.DeleteInstanceResources(inst)
+}
+
+func (o *DBOperator) Add(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error {
+	return o.storage.InsertResourceInstance(inst)
+}
+
+func (o *DBOperator) Update(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error {
+	return o.storage.UpdateResourceInstance()
+}
+
+func (o *DBOperator) Get(inst ObjectInstance, rid ResourceID, riId InstanceID) (Field, error) {
+	_ = o.storage.getDBResourceInstance(o.Class().Id(), inst.Id(), rid, riId)
+	return nil, ErrorNone
+}
+
+func (o *DBOperator) Delete(inst ObjectInstance, rid ResourceID, riId InstanceID) error {
+	return o.storage.DeleteResourceInstance(o.Class().Id(), inst.Id(), rid, riId)
+}
+
+func (o *DBOperator) Execute(inst ObjectInstance, rid ResourceID, riId InstanceID) error {
+	return o.storage.ExecuteResourceInstance(o.Class().Id(), inst.Id(), rid, riId)
+}
+
+func NewDBOperator(db *DBStorage) Operator {
+	return &DBOperator{
+		BaseOperator: NewBaseOperator(),
+		storage:      db,
+	}
 }

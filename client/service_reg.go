@@ -285,7 +285,7 @@ func (r *Registrar) Register() error {
 	r.setState(rsRegistering)
 
 	// send request
-	req := r.messager.NewConRequestPlainText(coap.Post, registerUri)
+	req := r.messager.NewConRequestPlainText(coap.Post, RegisterUri)
 	req.SetURIQuery("ep", r.client.name)
 	req.SetURIQuery("lt", defaultLifetime)
 	req.SetURIQuery("lwm2m", lwM2MVersion)
@@ -318,7 +318,7 @@ func (r *Registrar) Register() error {
 func (r *Registrar) Deregister() error {
 	r.setState(rsUnregistering)
 
-	uri := registerUri + fmt.Sprintf("/%s", r.location)
+	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
 	req := r.messager.NewConRequestPlainText(coap.Delete, uri)
 	rsp, err := r.messager.SendRequest(req)
 	if err != nil {
@@ -333,7 +333,7 @@ func (r *Registrar) Deregister() error {
 		return nil
 	}
 
-	return errors.New(rsp.GetMessage().GetCodeString())
+	return errors.New(coap.CoapCodeToString(rsp.GetMessage().Code))
 }
 
 // Update requests with parameters like:
@@ -345,7 +345,7 @@ func (r *Registrar) Deregister() error {
 func (r *Registrar) Update(params ...any) error {
 	r.setState(rsUpdating)
 
-	uri := registerUri + fmt.Sprintf("/%s", r.location)
+	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
 	req := r.messager.NewConRequestPlainText(coap.Post, uri)
 	req.SetStringPayload(r.buildObjectInstancesList())
 	rsp, err := r.messager.SendRequest(req)
@@ -387,4 +387,9 @@ func (r *Registrar) buildObjectInstancesList() string {
 	}
 
 	return buf.String()
+}
+
+func (r *Registrar) timeout() bool {
+	// TODO
+	return false
 }

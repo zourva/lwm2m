@@ -31,16 +31,17 @@ type Bootstrapper struct {
 	client  *LwM2MClient
 	machine *meta.StateMachine
 
-	messager Messager
+	messager core.Messager
 
 	//state tracking
 	state bootstrapState
 
+	lastAttempt       time.Time
 	bootSeverBootInfo *core.BootstrapServerBootstrapInfo
 	serverBootInfo    *core.ServerBootstrapInfo
 }
 
-// BootstrapRequest implements BootstrapRequest operation
+// Request implements BootstrapRequest operation
 //
 //	method: POST
 //	path: /bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
@@ -49,11 +50,12 @@ type Bootstrapper struct {
 //	 4.00 Bad Request Unknown Endpoint Client Name
 //		   Endpoint Client Name does not match with CN field of X.509 Certificates
 //	 4.15 Unsupported content format The specified format is not supported
-func (r *Bootstrapper) BootstrapRequest() error {
+func (r *Bootstrapper) Request() error {
 	r.setState(bsBootstrapping)
 
-	req := r.messager.NewConRequestPlainText(coap.Post, boostrapUri)
+	req := r.messager.NewConRequestPlainText(coap.Post, core.BoostrapUri)
 	req.SetURIQuery("ep", r.client.name)
+	//req.SetURIQuery("pct", fmt.Sprintf("%d", coap.MediaTypeOpaqueVndOmaLwm2m))
 	rsp, err := r.messager.SendRequest(req)
 	if err != nil {
 		log.Errorln("send bootstrap request failed:", err)
@@ -69,7 +71,7 @@ func (r *Bootstrapper) BootstrapRequest() error {
 	return errors.New(rsp.GetMessage().GetCodeString())
 }
 
-// BootstrapPackRequest implements BootstrapPackRequest operation
+// PackRequest implements BootstrapPackRequest operation
 //
 //	method: GET
 //	format: SenML CBOR, SenML JSON, or LwM2M CBOR
@@ -82,8 +84,8 @@ func (r *Bootstrapper) BootstrapRequest() error {
 //	 4.05 Method Not Allowed The LwM2M Client is not allowed for "Bootstrap-Pack-Request" operation
 //	 4.06 Not Acceptable The specified Content-Format is not supported
 //	 5.01 Not Implemented The operation is not implemented.
-func (r *Bootstrapper) BootstrapPackRequest() error {
-	req := r.messager.NewConRequestPlainText(coap.Get, bootstrapPackUri)
+func (r *Bootstrapper) PackRequest() error {
+	req := r.messager.NewConRequestPlainText(coap.Get, core.BootstrapPackUri)
 	req.SetURIQuery("ep", r.client.name)
 	rsp, err := r.messager.SendRequest(req)
 	if err != nil {
@@ -97,10 +99,10 @@ func (r *Bootstrapper) BootstrapPackRequest() error {
 		return nil
 	}
 
-	return errors.New(rsp.GetMessage().GetCodeString())
+	return errors.New(coap.CoapCodeToString(rsp.GetMessage().Code))
 }
 
-func (r *Bootstrapper) OnBootstrapRead() (*core.ResourceField, core.ErrorType) {
+func (r *Bootstrapper) OnRead() (*core.ResourceField, error) {
 	//TODO implement me
 	//codes may respond:
 	//2.05 Content "Read" operation is completed successfully
@@ -112,7 +114,7 @@ func (r *Bootstrapper) OnBootstrapRead() (*core.ResourceField, core.ErrorType) {
 	panic("implement me")
 }
 
-func (r *Bootstrapper) OnBootstrapWrite() core.ErrorType {
+func (r *Bootstrapper) OnWrite() error {
 	//TODO implement me
 	//codes may respond:
 	//2.04 Changed "Write" operation is completed successfully
@@ -121,7 +123,7 @@ func (r *Bootstrapper) OnBootstrapWrite() core.ErrorType {
 	panic("implement me")
 }
 
-func (r *Bootstrapper) OnBootstrapDelete() core.ErrorType {
+func (r *Bootstrapper) OnDelete() error {
 	//TODO implement me
 	//codes may respond:
 	//2.02 Deleted "Delete" operation is completed successfully
@@ -129,7 +131,7 @@ func (r *Bootstrapper) OnBootstrapDelete() core.ErrorType {
 	panic("implement me")
 }
 
-func (r *Bootstrapper) OnBootstrapDiscover() (*core.ResourceField, core.ErrorType) {
+func (r *Bootstrapper) OnDiscover() (*core.ResourceField, error) {
 	//TODO implement me
 	//codes may respond:
 	//2.05 Content "Discover" operation is completed successfully
@@ -138,7 +140,7 @@ func (r *Bootstrapper) OnBootstrapDiscover() (*core.ResourceField, core.ErrorTyp
 	panic("implement me")
 }
 
-func (r *Bootstrapper) OnBootstrapFinish() core.ErrorType {
+func (r *Bootstrapper) OnFinish() error {
 	//2.04 Changed Bootstrap-Finished is completed successfully
 	//4.00 Bad Request Bad URI provided
 	//4.06 Not Acceptable Inconsistent loaded configuration
@@ -151,6 +153,12 @@ func (r *Bootstrapper) BootstrapServerBootstrapInfo() *core.BootstrapServerBoots
 	return r.bootSeverBootInfo
 }
 
+// SetBootstrapServerBootstrapInfo set the pre-provisioned bootstrap
+// server account as depicted:
+// In order for the LwM2M Client and the LwM2M Bootstrap-Server
+// to establish a connection on the Bootstrap Interface, either in
+// Client Initiated Bootstrap mode or in Server Initiated Bootstrap
+// mode, the LwM2M Client MUST have an LwM2M Bootstrap-Server Account pre-provisioned.
 func (r *Bootstrapper) SetBootstrapServerBootstrapInfo(info *core.BootstrapServerBootstrapInfo) {
 	r.bootSeverBootInfo = info
 }
@@ -180,6 +188,10 @@ func (r *Bootstrapper) Start() bool {
 	return r.machine.Startup()
 }
 
+func (r *Bootstrapper) Stop() {
+	r.machine.Shutdown()
+}
+
 func (r *Bootstrapper) getState() bootstrapState {
 	return r.state
 }
@@ -193,7 +205,7 @@ func (r *Bootstrapper) bootstrapped() bool {
 }
 
 func (r *Bootstrapper) onInitial(args any) {
-	if err := r.BootstrapRequest(); err != nil {
+	if err := r.Request(); err != nil {
 		log.Errorf("bootstrap failed: %v", err)
 		return
 	}
@@ -210,5 +222,9 @@ func (r *Bootstrapper) onBootstrapping(args any) {
 }
 
 func (r *Bootstrapper) onExiting(args any) {
+	log.Infof("bootstraper exiting")
+}
 
+func (r *Bootstrapper) timeout() bool {
+	return time.Now().Sub(r.lastAttempt) > 5*time.Second
 }

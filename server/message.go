@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
@@ -9,29 +10,32 @@ import (
 	"time"
 )
 
-// Messager encapsulates and hide
+// ServerMessager encapsulates and hide
 // transport layer details.
-type Messager struct {
+//
+// Put them together here to make it
+// easier when replacing COAP layer later.
+type ServerMessager struct {
 	server *LwM2MServer
 
 	// application layer
-	//bootstrapService
-	registrationService RegistrationServer
-	reportingService    ReportingServer
+	bootstrapService BootstrapServer
+	registerService  RegistrationServer
+	reportingService ReportingServer
 	//m.deviceControlService = NewDeviceControlService(s)
 
 	// session layer
 	coapConn coap.CoapServer
 }
 
-func NewMessageHandler(server *LwM2MServer) *Messager {
-	m := &Messager{
+func NewMessager(server *LwM2MServer) *ServerMessager {
+	m := &ServerMessager{
 		server:   server,
 		coapConn: server.coapConn,
 	}
 
-	//s.bootstrapService = NewBootstrapService()
-	m.registrationService = NewRegistrationService(server)
+	m.bootstrapService = NewBootstrapService(server)
+	m.registerService = NewRegistrationService(server)
 	m.reportingService = NewInfoReportingService(server)
 
 	//m.deviceControlService = NewDeviceControlService(server)
@@ -41,11 +45,36 @@ func NewMessageHandler(server *LwM2MServer) *Messager {
 
 // handle request parameters like:
 //
+//	 uri:
+//		/bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
+func (m *ServerMessager) onClientBootstrap(req coap.CoapRequest) coap.CoapResponse {
+	ep := req.GetURIQuery("ep")
+	addr := req.GetAddress().String()
+	err := m.bootstrapService.OnRequest(ep, addr)
+	if err != nil {
+		log.Errorf("error bootstrap client %s: %v", ep, err)
+		msg := m.createRspMsg(req, coap.MessageAcknowledgment, GetErrorCode(err))
+		return coap.NewResponseWithMessage(msg)
+	}
+
+	return nil
+}
+
+// handle request parameters like:
+//
+//	 uri:
+//		/bspack?ep={Endpoint Client Name}
+func (m *ServerMessager) onClientBootstrapPack(req coap.CoapRequest) coap.CoapResponse {
+	panic("implement me")
+}
+
+// handle request parameters like:
+//
 //	uri: /rd?ep={Endpoint Client Name}&lt={Lifetime}
 //	        &lwm2m={version}&b={binding}&Q&sms={MSISDN}&pid={ProfileID}
 //	   b/Q/sms/pid are optional.
 //	body: </1/0>,... which is optional.
-func (m *Messager) onClientRegister(req coap.CoapRequest) coap.CoapResponse {
+func (m *ServerMessager) onClientRegister(req coap.CoapRequest) coap.CoapResponse {
 	ep := req.GetURIQuery("ep")
 	lt, _ := strconv.Atoi(req.GetURIQuery("lt"))
 	lwm2m := req.GetURIQuery("lwm2m")
@@ -64,7 +93,7 @@ func (m *Messager) onClientRegister(req coap.CoapRequest) coap.CoapResponse {
 		UpdateTime:      time.Now(),
 	}
 
-	clientId, err := m.registrationService.OnRegister(info)
+	clientId, err := m.registerService.OnRegister(info)
 	if err != nil {
 		log.Errorf("error registering client %s: %v", ep, err)
 		msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeInternalServerError)
@@ -83,7 +112,7 @@ func (m *Messager) onClientRegister(req coap.CoapRequest) coap.CoapResponse {
 //	uri: /{location}?lt={Lifetime}&b={binding}&Q&sms={MSISDN}
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
-func (m *Messager) onClientUpdate(req coap.CoapRequest) coap.CoapResponse {
+func (m *ServerMessager) onClientUpdate(req coap.CoapRequest) coap.CoapResponse {
 	id := req.GetAttribute("id")
 	lt, _ := strconv.Atoi(req.GetURIQuery("lt"))
 	binding := req.GetURIQuery("b")
@@ -97,7 +126,7 @@ func (m *Messager) onClientUpdate(req coap.CoapRequest) coap.CoapResponse {
 		UpdateTime:      time.Now(),
 	}
 
-	err := m.registrationService.OnUpdate(info)
+	err := m.registerService.OnUpdate(info)
 	if err != nil {
 		log.Errorf("error updating client %s: %v", info.Name, err)
 		msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeInternalServerError)
@@ -112,10 +141,10 @@ func (m *Messager) onClientUpdate(req coap.CoapRequest) coap.CoapResponse {
 //
 //	uri: /{location}
 //	 where location has a format of /rd/{id}
-func (m *Messager) onClientDeregister(req coap.CoapRequest) coap.CoapResponse {
+func (m *ServerMessager) onClientDeregister(req coap.CoapRequest) coap.CoapResponse {
 	id := req.GetAttribute("id")
 
-	m.registrationService.OnDeregister(id)
+	m.registerService.OnDeregister(id)
 
 	msg := m.createRspMsg(req, coap.MessageAcknowledgment, coap.CodeDeleted)
 	return coap.NewResponseWithMessage(msg)
@@ -125,7 +154,7 @@ func (m *Messager) onClientDeregister(req coap.CoapRequest) coap.CoapResponse {
 //
 //	uri: /dp
 //	body: implementation-specific.
-func (m *Messager) onSendInfo(req coap.CoapRequest) coap.CoapResponse {
+func (m *ServerMessager) onSendInfo(req coap.CoapRequest) coap.CoapResponse {
 	data := req.GetMessage().Payload.GetBytes()
 	// check resource contained in reported list
 	// check server granted read access
@@ -152,7 +181,99 @@ func (m *Messager) onSendInfo(req coap.CoapRequest) coap.CoapResponse {
 	return coap.NewResponseWithMessage(msg)
 }
 
-func (m *Messager) createRspMsg(req coap.CoapRequest, mt uint8, code coap.Code) *coap.Message {
+func (m *ServerMessager) Read(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error) {
+	uri := m.makeAccessPath(oid, oiId, rid, riId)
+	req := m.NewConRequestPlainText(coap.Get, uri)
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("read operation failed:", err)
+		return nil, err
+	}
+
+	// check response code
+	if rsp.GetMessage().Code == coap.CodeContent {
+		log.Debugf("read operation against %s done", uri)
+
+		return rsp.GetMessage().Payload.GetBytes(), nil
+	}
+
+	return nil, GetCodeError(rsp.GetMessage().Code)
+}
+
+func (m *ServerMessager) Discover(peer string, oid ObjectID) ([]byte, error) {
+	panic("implement me")
+}
+
+func (m *ServerMessager) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
+	uri := m.makeAccessPath(oid, oiId, rid, NoneID)
+	req := m.NewConRequestPlainText(coap.Put, uri)
+	req.SetPayload(value.ToBytes())
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("write operation failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.GetMessage().Code == coap.CodeChanged {
+		log.Debugf("write operation against %s done", uri)
+		return nil
+	}
+
+	return GetCodeError(rsp.GetMessage().Code)
+}
+
+func (m *ServerMessager) Delete(peer string, oid ObjectID, oiId InstanceID) error {
+	uri := m.makeAccessPath(oid, oiId, NoneID, NoneID)
+	req := m.NewConRequestPlainText(coap.Put, uri)
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("delete operation failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.GetMessage().Code == coap.CodeDeleted {
+		log.Debugf("delete operation against %s done", uri)
+		return nil
+	}
+
+	return GetCodeError(rsp.GetMessage().Code)
+}
+
+func (m *ServerMessager) Finish(peer string) error {
+	req := m.NewConRequestPlainText(coap.Get, BootstrapFinishUri)
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("bootstrap finish operation failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.GetMessage().Code == coap.CodeChanged {
+		log.Debugf("bootstrap finish operation done")
+		return nil
+	}
+
+	return GetCodeError(rsp.GetMessage().Code)
+}
+
+func (m *ServerMessager) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {
+	optionIds := []uint16{oiId, rid, riId}
+
+	uri := fmt.Sprintf("/%d", oid)
+	for _, id := range optionIds {
+		if id == NoneID {
+			break
+		}
+
+		uri += fmt.Sprintf("/%d", id)
+	}
+
+	return uri
+}
+
+func (m *ServerMessager) createRspMsg(req coap.CoapRequest, mt uint8, code coap.Code) *coap.Message {
 	msg := coap.NewMessageOfType(mt, req.GetMessage().MessageID)
 	msg.Token = req.GetMessage().Token
 	msg.Code = code
@@ -160,20 +281,54 @@ func (m *Messager) createRspMsg(req coap.CoapRequest, mt uint8, code coap.Code) 
 	return msg
 }
 
-func (m *Messager) NewRequest(t uint8, c coap.Code, id uint16, mt coap.MediaType, uri string) coap.CoapRequest {
+func (m *ServerMessager) NewAckPiggyback(req coap.CoapRequest, code coap.Code, payload coap.MessagePayload) *coap.Message {
+	msg := coap.NewMessageOfType(coap.MessageAcknowledgment, req.GetMessage().MessageID)
+	msg.Token = req.GetMessage().Token
+	msg.Code = code
+
+	if payload != nil {
+		msg.Payload = payload
+	}
+
+	return msg
+}
+
+func (m *ServerMessager) NewConRequestPlainText(method coap.Code, uri string) coap.CoapRequest {
+	return m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeTextPlain, uri)
+}
+
+func (m *ServerMessager) NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.CoapRequest {
+	req := m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeOpaqueVndOmaLwm2m, uri)
+	req.SetPayload(payload)
+	return req
+}
+
+func (m *ServerMessager) NewRequest(t uint8, c coap.Code, mt coap.MediaType, uri string) coap.CoapRequest {
 	//req := coap.NewRequest(coap.MessageConfirmable, coap.Get, coap.GenerateMessageID())
-	req := coap.NewRequest(t, c, id)
+	req := coap.NewRequest(t, c, coap.GenerateMessageID())
 	req.SetRequestURI(uri)
 	req.SetMediaType(mt)
 	return req
 }
 
-func (m *Messager) SendRequestToClient(peer string, req coap.CoapRequest) ([]byte, error) {
+func (m *ServerMessager) SendRequest(peer string, req coap.CoapRequest) (coap.CoapResponse, error) {
+	clientAddr, _ := net.ResolveUDPAddr("udp", peer)
+
+	rsp, err := m.coapConn.SendTo(req, clientAddr)
+	if err != nil {
+		//log.Println(err)
+		return nil, err
+	}
+
+	return rsp, nil
+}
+
+func (m *ServerMessager) SendRequestToClient(peer string, req coap.CoapRequest) ([]byte, error) {
 	clientAddr, _ := net.ResolveUDPAddr("udp", peer)
 
 	response, err := m.coapConn.SendTo(req, clientAddr)
 	if err != nil {
-		log.Println(err)
+		log.Errorf("send to peer %s failed: %v", peer, err)
 		return nil, err
 	}
 

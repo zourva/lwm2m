@@ -18,7 +18,7 @@ type ResourceField struct {
 	value  Value
 }
 
-func NewResourceField(id ResourceID, value Value) Value {
+func NewResourceField(id ResourceID, value Value) *ResourceField {
 	return &ResourceField{
 		id:    id,
 		value: value,

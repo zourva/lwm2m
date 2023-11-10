@@ -9,12 +9,14 @@ import (
 // RegistrationService implements application layer logic
 // for client registration procedure at server side.
 type RegistrationService struct {
-	clientMgr RegisteredClientManager
+	server    *LwM2MServer
+	clientMgr RegisterManager
 }
 
 func NewRegistrationService(server *LwM2MServer) RegistrationServer {
 	s := &RegistrationService{
-		clientMgr: server.manager,
+		server:    server,
+		clientMgr: server.registerManager,
 	}
 
 	return s
@@ -27,15 +29,22 @@ func (s *RegistrationService) OnRegister(info *RegistrationInfo) (string, error)
 		return "", err
 	}
 
+	if s.server.onRegistered != nil {
+		if _, err := s.server.onRegistered(info); err != nil {
+			return "", err
+		}
+	}
+
 	// existence check: removes the old one
-	if ssn := s.clientMgr.GetByAddr(info.Address); ssn != nil {
-		s.clientMgr.DeleteByLocation(ssn.Name())
+	client := s.clientMgr.GetByAddr(info.Address)
+	if client != nil {
+		s.clientMgr.DeleteByLocation(client.Name())
 	}
 
 	// create and save the session
-	session := s.clientMgr.Create(info)
+	client = s.clientMgr.Add(info)
 
-	return session.Location(), nil
+	return client.Location(), nil
 }
 
 func (s *RegistrationService) OnUpdate(info *RegistrationInfo) error {

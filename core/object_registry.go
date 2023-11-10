@@ -1,7 +1,5 @@
 package core
 
-import "github.com/zourva/lwm2m/objects"
-
 //type OperationType = int
 //
 //// Operation Types
@@ -28,7 +26,8 @@ type ObjectMap = map[ObjectID]Object
 //
 // NOTE: write of object classes are implementation dependent.
 type ObjectRegistry interface {
-	// GetObject returns the class identified by id.
+	// GetObject returns the class identified
+	// by id or nil if not found.
 	GetObject(id ObjectID) Object
 
 	// GetObjects returns all classes defined.
@@ -134,7 +133,7 @@ func NewObjectRegistry(descriptorsGroup ...[]string) ObjectRegistry {
 		objects: make(ObjectMap),
 	}
 
-	descriptorsGroup = append(descriptorsGroup, objects.GetOMAObjectDescriptors())
+	//descriptorsGroup = append(descriptorsGroup, objects.GetOMAObjectDescriptors())
 
 	var providers []ObjectProvider
 	for _, descriptors := range descriptorsGroup {

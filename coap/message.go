@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"sort"
 	"strconv"
@@ -339,8 +340,8 @@ func (m *Message) GetAcceptedContent() MediaType {
 }
 
 func (m *Message) GetCodeString() string {
-	codeClass := string(m.Code >> 5)
-	codeDetail := string(m.Code & 0x1f)
+	codeClass := fmt.Sprintf("%d", m.Code>>5)
+	codeDetail := fmt.Sprintf("%02d", m.Code&0x1f)
 
 	return codeClass + "." + codeDetail
 }
