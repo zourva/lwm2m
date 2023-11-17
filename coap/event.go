@@ -1,8 +1,8 @@
 package coap
 
 type FnEventNotify func(string, interface{}, *Message)
-type FnEventStart func(CoapServer)
-type FnEventClose func(CoapServer)
+type FnEventStart func(Server)
+type FnEventClose func(Server)
 type FnEventDiscover func()
 type FnEventError func(error)
 type FnEventObserve func(string, *Message)
@@ -104,14 +104,14 @@ func (ce *Events) Notify(resource string, value interface{}, msg *Message) {
 }
 
 // Fires the "OnStarted" event
-func (ce *Events) Started(server CoapServer) {
+func (ce *Events) Started(server Server) {
 	for _, fn := range ce.evtFnStart {
 		fn(server)
 	}
 }
 
 // Fires the "OnClosed" event
-func (ce *Events) Closed(server CoapServer) {
+func (ce *Events) Closed(server Server) {
 	for _, fn := range ce.evtFnClose {
 		fn(server)
 	}

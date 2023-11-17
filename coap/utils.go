@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// GenerateMessageId generate a uint16 Message ID
+// GenerateMessageID generates a uint16 Message ID.
 func GenerateMessageID() uint16 {
 	if CurrentMessageID != 65535 {
 		CurrentMessageID++

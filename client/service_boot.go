@@ -56,7 +56,7 @@ func (r *Bootstrapper) Request() error {
 	req := r.messager.NewConRequestPlainText(coap.Post, core.BoostrapUri)
 	req.SetURIQuery("ep", r.client.name)
 	//req.SetURIQuery("pct", fmt.Sprintf("%d", coap.MediaTypeOpaqueVndOmaLwm2m))
-	rsp, err := r.messager.SendRequest(req)
+	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send bootstrap request failed:", err)
 		return err
@@ -85,9 +85,11 @@ func (r *Bootstrapper) Request() error {
 //	 4.06 Not Acceptable The specified Content-Format is not supported
 //	 5.01 Not Implemented The operation is not implemented.
 func (r *Bootstrapper) PackRequest() error {
+	r.setState(bsBootstrapping)
+
 	req := r.messager.NewConRequestPlainText(coap.Get, core.BootstrapPackUri)
 	req.SetURIQuery("ep", r.client.name)
-	rsp, err := r.messager.SendRequest(req)
+	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("bootstrap pack request failed:", err)
 		return err
@@ -95,7 +97,8 @@ func (r *Bootstrapper) PackRequest() error {
 
 	//check response code
 	if rsp.GetMessage().Code == coap.CodeContent {
-		log.Infoln("bootstrap pack request done")
+		r.setState(bsBootstrapDone)
+		log.Infof("bootstrap pack request done with %d bytes response", len(rsp.GetPayload()))
 		return nil
 	}
 
@@ -185,6 +188,7 @@ func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
 }
 
 func (r *Bootstrapper) Start() bool {
+	r.lastAttempt = time.Now()
 	return r.machine.Startup()
 }
 
@@ -205,10 +209,12 @@ func (r *Bootstrapper) bootstrapped() bool {
 }
 
 func (r *Bootstrapper) onInitial(args any) {
-	if err := r.Request(); err != nil {
+	if err := r.PackRequest(); err != nil {
 		log.Errorf("bootstrap failed: %v", err)
 		return
 	}
+
+	log.Debugf("bootstrap requested")
 
 	r.machine.MoveToState(bootstrapping)
 }
@@ -226,5 +232,5 @@ func (r *Bootstrapper) onExiting(args any) {
 }
 
 func (r *Bootstrapper) timeout() bool {
-	return time.Now().Sub(r.lastAttempt) > 5*time.Second
+	return time.Now().Sub(r.lastAttempt) > 60*time.Second
 }

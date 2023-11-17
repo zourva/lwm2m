@@ -18,19 +18,19 @@ const (
 	ProxyCOAP ProxyType = 1
 )
 
-func NewLocalServer(name string) CoapServer {
+func NewLocalServer(name string) Server {
 	return NewServer(name, "5683", "")
 }
 
-func NewCoapServer(name string, local string) CoapServer {
+func NewCoapServer(name string, local string) Server {
 	return NewServer(name, local, "")
 }
 
-func NewCoapClient(name string) CoapServer {
+func NewCoapClient(name string) Server {
 	return NewServer(name, "0", "")
 }
 
-func NewServer(name, local, remote string) CoapServer {
+func NewServer(name, local, remote string) Server {
 	localHost := local
 	if !strings.Contains(localHost, ":") {
 		localHost = ":" + localHost
@@ -94,10 +94,10 @@ func (s *DefaultCoapServer) GetEvents() *Events {
 }
 
 func (s *DefaultCoapServer) Start() {
-	var discoveryRoute RouteHandler = func(req CoapRequest) CoapResponse {
+	var discoveryRoute RouteHandler = func(req Request) Response {
 		msg := req.GetMessage()
 
-		ack := ContentMessage(msg.MessageID, MessageAcknowledgment)
+		ack := ContentMessage(msg.Id, MessageAcknowledgment)
 		ack.Token = make([]byte, len(msg.Token))
 		copy(ack.Token, msg.Token)
 
@@ -149,13 +149,13 @@ func (s *DefaultCoapServer) handleIncomingData(conn *net.UDPConn) {
 			// continue
 		}
 
-		len, addr, err := conn.ReadFromUDP(readBuf)
+		len, peer, err := conn.ReadFromUDP(readBuf)
 		if err == nil {
 			msgBuf := make([]byte, len)
 			copy(msgBuf, readBuf)
-			go s.handleMessage(msgBuf, conn, addr)
+			go s.handleMessage(msgBuf, conn, peer)
 		} else {
-			log.Println("Error occured reading UDP", err)
+			log.Println("error occurred:", err)
 		}
 
 	}
@@ -174,6 +174,16 @@ func (s *DefaultCoapServer) serveServer() {
 
 	if conn == nil {
 		log.Fatal("error occurred starting CoAP server")
+	}
+
+	err = conn.SetWriteBuffer(8 * 1024 * 1024)
+	if err != nil {
+		log.Fatalln("error occurred enlarging write buffer:", err)
+	}
+
+	err = conn.SetReadBuffer(8 * 1024 * 1024)
+	if err != nil {
+		log.Fatalln("error occurred enlarging read buffer:", err)
 	}
 
 	log.Println("started CoAP peer", conn.LocalAddr())
@@ -204,7 +214,7 @@ func (s *DefaultCoapServer) UpdateBlockMessageFragment(client string, msg *Messa
 	s.incomingBlockMessages[client] = msgs
 }
 
-func (s *DefaultCoapServer) FlushBlockMessagePayload(origin string) MessagePayload {
+func (s *DefaultCoapServer) FlushBlockMessagePayload(origin string) Payload {
 	msgs := s.incomingBlockMessages[origin]
 
 	payload := msgs.MessageBuf
@@ -234,14 +244,14 @@ func (s *DefaultCoapServer) SetProxyFilter(fn ProxyFilter) {
 	s.fnProxyFilter = fn
 }
 
-func (s *DefaultCoapServer) handleMessage(msgBuf []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+func (s *DefaultCoapServer) handleMessage(msgBuf []byte, conn *net.UDPConn, peerAddr *net.UDPAddr) {
 	msg, err := BytesToMessage(msgBuf)
 	s.events.Message(msg, true)
 
-	if msg.MessageType == MessageAcknowledgment {
-		handleResponse(s, msg, conn, addr)
+	if msg.Type == MessageAcknowledgment {
+		handleResponse(s, msg, conn, peerAddr)
 	} else {
-		handleRequest(s, err, msg, conn, addr)
+		handleRequest(s, err, msg, conn, peerAddr)
 	}
 }
 
@@ -283,7 +293,7 @@ func (s *DefaultCoapServer) NewRoute(path string, method Code, fn RouteHandler) 
 	return route
 }
 
-func (s *DefaultCoapServer) Send(req CoapRequest) (CoapResponse, error) {
+func (s *DefaultCoapServer) Send(req Request) (Response, error) {
 	msg := req.GetMessage()
 	opt := msg.GetOption(OptionBlock1)
 
@@ -342,7 +352,7 @@ func (s *DefaultCoapServer) Send(req CoapRequest) (CoapResponse, error) {
 
 					blockOpt = NewBlock1Option(blockOpt.Size(), more, currSeq)
 					msg.ReplaceOptions(blockOpt.Code, []Option{blockOpt})
-					msg.MessageID = GenerateMessageID()
+					msg.Id = GenerateMessageID()
 					msg.Payload = NewBytesPayload(blockPayload)
 
 					// send message
@@ -382,7 +392,7 @@ func (s *DefaultCoapServer) storeNewOutgoingBlockMessage(client string, payload 
 	s.outgoingBlockMessages[client] = bm
 }
 
-func (s *DefaultCoapServer) SendTo(req CoapRequest, addr *net.UDPAddr) (CoapResponse, error) {
+func (s *DefaultCoapServer) SendTo(req Request, addr *net.UDPAddr) (Response, error) {
 	return SendMessageTo(s, req.GetMessage(), NewUDPConnection(s.localConn), addr)
 }
 
@@ -390,7 +400,7 @@ func (s *DefaultCoapServer) NotifyChange(resource, value string, confirm bool) {
 	t := s.observations[resource]
 
 	if t != nil {
-		var req CoapRequest
+		var req Request
 
 		if confirm {
 			req = NewRequest(MessageConfirmable, CodeContent, GenerateMessageID())
@@ -525,13 +535,13 @@ func (s *DefaultCoapServer) GetLocalAddress() *net.UDPAddr {
 }
 
 func (s *DefaultCoapServer) IsDuplicateMessage(msg *Message) bool {
-	_, ok := s.messageIds[msg.MessageID]
+	_, ok := s.messageIds[msg.Id]
 
 	return ok
 }
 
 func (s *DefaultCoapServer) UpdateMessageTS(msg *Message) {
-	s.messageIds[msg.MessageID] = time.Now()
+	s.messageIds[msg.Id] = time.Now()
 }
 
 func NewResponseChannel() (ch chan *CoapResponseChannel) {
@@ -540,19 +550,19 @@ func NewResponseChannel() (ch chan *CoapResponseChannel) {
 	return
 }
 
-func AddResponseChannel(c CoapServer, msgId uint16, ch chan *CoapResponseChannel) {
+func AddResponseChannel(c Server, msgId uint16, ch chan *CoapResponseChannel) {
 	s := c.(*DefaultCoapServer)
 
 	s.coapResponseChannelsMap[msgId] = ch
 }
 
-func DeleteResponseChannel(c CoapServer, msgId uint16) {
+func DeleteResponseChannel(c Server, msgId uint16) {
 	s := c.(*DefaultCoapServer)
 
 	delete(s.coapResponseChannelsMap, msgId)
 }
 
-func GetResponseChannel(c CoapServer, msgId uint16) (ch chan *CoapResponseChannel) {
+func GetResponseChannel(c Server, msgId uint16) (ch chan *CoapResponseChannel) {
 	s := c.(*DefaultCoapServer)
 	ch = s.coapResponseChannelsMap[msgId]
 

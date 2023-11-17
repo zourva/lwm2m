@@ -19,6 +19,7 @@ const (
 )
 
 type MessagerClient struct {
+	*BaseMessager
 	client *LwM2MClient
 	state  connState
 	mute   bool
@@ -48,7 +49,7 @@ func (m *MessagerClient) Start() {
 
 	// add a callback to trigger auto registration
 	// procedure when transport layer started.
-	s.OnStart(func(server coap.CoapServer) {
+	s.OnStart(func(server coap.Server) {
 		m.state = connected
 		log.Infoln("lwm2m client connected")
 	})
@@ -102,7 +103,7 @@ func (m *MessagerClient) muted() bool {
 	return m.mute
 }
 
-func (m *MessagerClient) conn() coap.CoapServer {
+func (m *MessagerClient) conn() coap.Server {
 	return m.client.coapConn
 }
 
@@ -114,13 +115,13 @@ func (m *MessagerClient) devController() DeviceControlClient {
 	return m.deviceCtrlDelegator
 }
 
-func (m *MessagerClient) getOID(req coap.CoapRequest) ObjectID {
+func (m *MessagerClient) getOID(req coap.Request) ObjectID {
 	objectId := req.GetAttributeAsInt("oid")
 	return ObjectID(objectId)
 }
 
 // if not provided, return NoneID
-func (m *MessagerClient) getOIID(req coap.CoapRequest) InstanceID {
+func (m *MessagerClient) getOIID(req coap.Request) InstanceID {
 	instanceId := NoneID
 
 	instance := req.GetAttribute("oiid")
@@ -132,7 +133,7 @@ func (m *MessagerClient) getOIID(req coap.CoapRequest) InstanceID {
 }
 
 // if not provided, return NoneID
-func (m *MessagerClient) getRID(req coap.CoapRequest) ResourceID {
+func (m *MessagerClient) getRID(req coap.Request) ResourceID {
 	resourceId := NoneID
 
 	resource := req.GetAttribute("rid")
@@ -144,7 +145,7 @@ func (m *MessagerClient) getRID(req coap.CoapRequest) ResourceID {
 }
 
 // if not provided, return NoneID
-func (m *MessagerClient) getRIID(req coap.CoapRequest) InstanceID {
+func (m *MessagerClient) getRIId(req coap.Request) InstanceID {
 	instanceId := NoneID
 
 	instance := req.GetAttribute("riid")
@@ -165,99 +166,93 @@ func (m *MessagerClient) getMediaTypeFromValue(v Value) coap.MediaType {
 
 ////// bootstrap procedure handlers
 
-func (m *MessagerClient) onBootstrapRead(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onBootstrapRead(req coap.Request) coap.Response {
 	panic("implement me")
 }
 
-func (m *MessagerClient) onBootstrapWrite(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onBootstrapWrite(req coap.Request) coap.Response {
 	panic("implement me")
 }
 
-func (m *MessagerClient) onBootstrapDelete(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onBootstrapDelete(req coap.Request) coap.Response {
 	panic("implement me")
 }
 
-func (m *MessagerClient) onBootstrapDiscover(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onBootstrapDiscover(req coap.Request) coap.Response {
 	panic("implement me")
 }
 
-func (m *MessagerClient) onBootstrapFinish(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onBootstrapFinish(req coap.Request) coap.Response {
 	log.Debugln("receive bootstrap finish")
 
 	err := m.bootstrapper().OnFinish()
-	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
-	return coap.NewResponseWithMessage(msg)
+	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
 }
 
 ////// device management and service enablement handlers
 
-func (m *MessagerClient) onServerCreate(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onServerCreate(req coap.Request) coap.Response {
 	log.Debugln("receive create request:", req.GetMessage().GetURIPath())
 
 	objectId := m.getOID(req)
 	err := m.devController().OnCreate(objectId, String(""))
-	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
-	log.Debugln("create request done:", msg)
-
-	return coap.NewResponseWithMessage(msg)
+	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
 }
 
-func (m *MessagerClient) onServerRead(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onServerRead(req coap.Request) coap.Response {
 	log.Debugln("receive read request:", req.GetMessage().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
 	rid := m.getRID(req)
-	riId := m.getRIID(req)
+	riId := m.getRIId(req)
 
-	var payload coap.MessagePayload
+	var payload coap.Payload
 	value, err := m.devController().OnRead(oid, oiId, rid, riId)
 	if err == ErrorNone {
 		buf := endec.EncodeValue(rid, value.Class().Multiple(), value)
 		payload = coap.NewBytesPayload(buf)
 	}
 
-	msg := m.NewAckPiggyback(req, GetErrorCode(err), payload)
-	msg.AddOption(coap.OptionContentFormat, m.getMediaTypeFromValue(value))
+	rsp := m.NewPiggybackedResponse(req, GetErrorCode(err), payload)
+	rsp.GetMessage().AddOption(coap.OptionContentFormat, m.getMediaTypeFromValue(value))
 
-	return coap.NewResponseWithMessage(msg)
+	return rsp
 }
 
-func (m *MessagerClient) onServerDelete(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onServerDelete(req coap.Request) coap.Response {
 	log.Debugln("receive delete request:", req.GetMessage().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
 	rid := m.getRID(req)
-	riId := m.getRIID(req)
+	riId := m.getRIId(req)
 
 	err := m.devController().OnDelete(oid, oiId, rid, riId)
-	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
-	return coap.NewResponseWithMessage(msg)
+	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
 }
 
-func (m *MessagerClient) onServerDiscover(req coap.CoapRequest) {
+func (m *MessagerClient) onServerDiscover(req coap.Request) {
 	log.Debugln("receive discover request:", req.GetMessage().GetURIPath())
 }
 
-func (m *MessagerClient) onServerWrite(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
 	log.Debugln("receive write request:", req.GetMessage().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
 	rid := m.getRID(req)
-	riId := m.getRIID(req)
+	riId := m.getRIId(req)
 
 	err := m.devController().OnWrite(oid, oiId, rid, riId, String(""))
-	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
-	return coap.NewResponseWithMessage(msg)
+	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
 }
 
-func (m *MessagerClient) onServerExecute(req coap.CoapRequest) coap.CoapResponse {
+func (m *MessagerClient) onServerExecute(req coap.Request) coap.Response {
 	log.Debugln("receive execute request:", req.GetMessage().GetURIPath())
 
 	oid := m.getOID(req)
@@ -265,17 +260,26 @@ func (m *MessagerClient) onServerExecute(req coap.CoapRequest) coap.CoapResponse
 	rid := m.getRID(req)
 
 	err := m.devController().OnExecute(oid, oiId, rid, "")
-	msg := m.NewAckPiggyback(req, GetErrorCode(err), coap.NewEmptyPayload())
 
-	return coap.NewResponseWithMessage(msg)
+	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
 }
 
 func (m *MessagerClient) onServerObserve() {
 	log.Println("Observe Request")
 }
 
-func (m *MessagerClient) NewAckPiggyback(req coap.CoapRequest, code coap.Code, payload coap.MessagePayload) *coap.Message {
-	msg := coap.NewMessageOfType(coap.MessageAcknowledgment, req.GetMessage().MessageID)
+// NewPiggybackedResponse creates an ACK-piggybacked response.
+//
+//	Client              Server
+//	   |                  |
+//	   |   CON [0x7d34]   |
+//	   +----------------->|
+//	   |                  |
+//	   |   ACK [0x7d34]   |
+//	   |<-----------------+
+//	   |                  |
+func (m *MessagerClient) NewPiggybackedResponse(req coap.Request, code coap.Code, payload coap.Payload) coap.Response {
+	msg := coap.NewMessageOfType(coap.MessageAcknowledgment, req.GetMessage().Id)
 	msg.Token = req.GetMessage().Token
 	msg.Code = code
 
@@ -283,37 +287,21 @@ func (m *MessagerClient) NewAckPiggyback(req coap.CoapRequest, code coap.Code, p
 		msg.Payload = payload
 	}
 
-	return msg
+	log.Debugln("new piggybacked response:", msg)
+
+	return coap.NewResponseWithMessage(msg)
 }
 
-func (m *MessagerClient) NewConRequestPlainText(method coap.Code, uri string) coap.CoapRequest {
-	return m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeTextPlain, uri)
-}
-
-func (m *MessagerClient) NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.CoapRequest {
-	req := m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeOpaqueVndOmaLwm2m, uri)
-	req.SetPayload(payload)
-	return req
-}
-
-func (m *MessagerClient) NewRequest(t uint8, c coap.Code, mt coap.MediaType, uri string) coap.CoapRequest {
-	req := coap.NewRequest(t, c, coap.GenerateMessageID())
-	req.SetRequestURI(uri)
-	req.SetMediaType(mt)
-	return req
-}
-
-func (m *MessagerClient) SendRequest(req coap.CoapRequest) (coap.CoapResponse, error) {
+func (m *MessagerClient) Send(req coap.Request) (coap.Response, error) {
 	rsp, err := m.conn().Send(req)
 	if err != nil {
-		//log.Println(err)
 		return nil, err
 	}
 
 	return rsp, nil
 }
 
-func (m *MessagerClient) SendNotify(observationId string, data []byte) error {
+func (m *MessagerClient) Notify(observationId string, data []byte) error {
 	m.conn().NotifyChange(observationId, string(data), false)
 	return nil
 }

@@ -7,14 +7,14 @@ import (
 )
 
 // Represents the payload/content of a CoAP Message
-type MessagePayload interface {
+type Payload interface {
 	GetBytes() []byte
 	Length() int
 	String() string
 }
 
 // Instantiates a new message payload of type string
-func NewPlainTextPayload(s string) MessagePayload {
+func NewPlainTextPayload(s string) Payload {
 	return &PlainTextPayload{
 		content: s,
 	}
@@ -54,7 +54,7 @@ func (p *CoreLinkFormatPayload) String() string {
 }
 
 // Represents a message payload containing an array of bytes
-func NewBytesPayload(v []byte) MessagePayload {
+func NewBytesPayload(v []byte) Payload {
 	return &BytesPayload{
 		content: v,
 	}
@@ -80,7 +80,7 @@ func (p *BytesPayload) String() string {
 type XMLPayload struct {
 }
 
-func NewEmptyPayload() MessagePayload {
+func NewEmptyPayload() Payload {
 	return &EmptyPayload{}
 }
 
@@ -100,7 +100,7 @@ func (p *EmptyPayload) String() string {
 	return ""
 }
 
-func NewJSONPayload(obj interface{}) MessagePayload {
+func NewJSONPayload(obj interface{}) Payload {
 	return &JSONPayload{
 		obj: obj,
 	}

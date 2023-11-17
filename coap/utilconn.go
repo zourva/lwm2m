@@ -5,11 +5,11 @@ import (
 )
 
 type CoapResponseChannel struct {
-	Response CoapResponse
+	Response Response
 	Error    error
 }
 
-func doSendMessage(c CoapServer, msg *Message, conn Connection, addr *net.UDPAddr, ch chan *CoapResponseChannel) {
+func doSendMessage(c Server, msg *Message, conn Connection, addr *net.UDPAddr, ch chan *CoapResponseChannel) {
 	resp := &CoapResponseChannel{}
 
 	b, err := MessageToBytes(msg)
@@ -24,16 +24,16 @@ func doSendMessage(c CoapServer, msg *Message, conn Connection, addr *net.UDPAdd
 		ch <- resp
 	}
 
-	if msg.MessageType == MessageNonConfirmable {
-		resp.Response = NewResponse(NewEmptyMessage(msg.MessageID), nil)
+	if msg.Type == MessageNonConfirmable {
+		resp.Response = NewResponse(NewEmptyMessage(msg.Id), nil)
 		ch <- resp
 	}
 
-	AddResponseChannel(c, msg.MessageID, ch)
+	AddResponseChannel(c, msg.Id, ch)
 }
 
 // SendMessageTo sends a CoAP Message to UDP address
-func SendMessageTo(c CoapServer, msg *Message, conn Connection, addr *net.UDPAddr) (CoapResponse, error) {
+func SendMessageTo(c Server, msg *Message, conn Connection, addr *net.UDPAddr) (Response, error) {
 	if conn == nil {
 		return nil, ErrNilConn
 	}
@@ -53,7 +53,7 @@ func SendMessageTo(c CoapServer, msg *Message, conn Connection, addr *net.UDPAdd
 	return respCh.Response, respCh.Error
 }
 
-func MessageSizeAllowed(req CoapRequest) bool {
+func MessageSizeAllowed(req Request) bool {
 	msg := req.GetMessage()
 	b, _ := MessageToBytes(msg)
 

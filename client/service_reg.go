@@ -291,7 +291,7 @@ func (r *Registrar) Register() error {
 	req.SetURIQuery("lwm2m", lwM2MVersion)
 	req.SetURIQuery("b", BindingModeUDP)
 	req.SetStringPayload(r.buildObjectInstancesList())
-	rsp, err := r.messager.SendRequest(req)
+	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send register request failed:", err)
 		return err
@@ -320,7 +320,7 @@ func (r *Registrar) Deregister() error {
 
 	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
 	req := r.messager.NewConRequestPlainText(coap.Delete, uri)
-	rsp, err := r.messager.SendRequest(req)
+	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send de-register request failed:", err)
 		return err
@@ -348,7 +348,7 @@ func (r *Registrar) Update(params ...any) error {
 	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
 	req := r.messager.NewConRequestPlainText(coap.Post, uri)
 	req.SetStringPayload(r.buildObjectInstancesList())
-	rsp, err := r.messager.SendRequest(req)
+	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send update request failed:", err)
 		return err

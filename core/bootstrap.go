@@ -42,7 +42,7 @@ type BootstrapClient interface {
 
 type BootstrapServer interface {
 	OnRequest(ep, addr string) error
-	OnPackRequest(ep string) error
+	OnPackRequest(ep string) ([]byte, error)
 
 	//// Read implements Read operation
 	////  method: GET

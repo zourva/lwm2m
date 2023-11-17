@@ -18,6 +18,8 @@ func init() {
 
 const UDP = "udp"
 
+type MessageType = uint8
+
 // Types of Messages
 const (
 	MessageConfirmable    = 0
@@ -65,9 +67,12 @@ const (
 	OptionSize1         OptionCode = 60
 )
 
-// Code defines a valid CoAP Code Type
+// Code defines a valid CoAP code which
+// is comprised by Method and Response codes.
 type Code uint8
 
+// 3-bits method codes;
+// 5-bits response codes
 const (
 	Get    Code = 1
 	Post   Code = 2
@@ -118,12 +123,12 @@ const DefaultCoapPort = 5683
 const DefaultCoapsPort = 5684
 
 const PayloadMarker = 0xff
-const MaxPacketSize = 1500
+const MaxPacketSize = 2 * 1024 * 1024 //1500
 
 // MessageIDPurgeDuration defines the number of seconds before a MessageID Purge is initiated
 const MessageIDPurgeDuration = 60
 
-type RouteHandler func(CoapRequest) CoapResponse
+type RouteHandler func(Request) Response
 
 type MediaType int
 
@@ -178,24 +183,24 @@ const (
 )
 
 // Errors
-var ErrPacketLengthLessThan4 = errors.New("Packet length less than 4 bytes")
-var ErrInvalidCoapVersion = errors.New("Invalid CoAP version. Should be 1.")
-var ErrOptionLengthUsesValue15 = errors.New(("Message format error. Option length has reserved value of 15"))
-var ErrOptionDeltaUsesValue15 = errors.New(("Message format error. Option delta has reserved value of 15"))
-var ErrUnknownMessageType = errors.New("Unknown message type")
-var ErrInvalidTokenLength = errors.New("Invalid Token Length ( > 8)")
-var ErrUnknownCriticalOption = errors.New("Unknown critical option encountered")
-var ErrUnsupportedMethod = errors.New("Unsupported Method")
-var ErrNoMatchingRoute = errors.New("No matching route found")
-var ErrUnsupportedContentFormat = errors.New("Unsupported Content-Format")
-var ErrNoMatchingMethod = errors.New("No matching method")
-var ErrNilMessage = errors.New("Message is nil")
-var ErrNilConn = errors.New("Connection object is nil")
-var ErrNilAddr = errors.New("Address cannot be nil")
-var ErrMessageSizeTooLongBlockOptionValNotSet = errors.New("Message is too long, block option or value not set")
+var ErrPacketLengthLessThan4 = errors.New("packet length less than 4 bytes")
+var ErrInvalidCoapVersion = errors.New("invalid CoAP version: should be 1")
+var ErrOptionLengthUsesValue15 = errors.New("message format error: option length has reserved value of 15")
+var ErrOptionDeltaUsesValue15 = errors.New("message format error: option delta has reserved value of 15")
+var ErrUnknownMessageType = errors.New("unknown message type")
+var ErrInvalidTokenLength = errors.New("invalid token length: greater than 8")
+var ErrUnknownCriticalOption = errors.New("unknown critical option encountered")
+var ErrUnsupportedMethod = errors.New("unsupported Method")
+var ErrNoMatchingRoute = errors.New("no matching route found")
+var ErrUnsupportedContentFormat = errors.New("unsupported Content-Format")
+var ErrNoMatchingMethod = errors.New("no matching method")
+var ErrNilMessage = errors.New("message is nil")
+var ErrNilConn = errors.New("connection object is nil")
+var ErrNilAddr = errors.New("address cannot be nil")
+var ErrMessageSizeTooLongBlockOptionValNotSet = errors.New("message is too long, block option or value not set")
 
 // Interfaces
-type CoapServer interface {
+type Server interface {
 	GetName() string
 	Start()
 	Stop()
@@ -207,8 +212,8 @@ type CoapServer interface {
 	Options(path string, fn RouteHandler) *Route
 	Patch(path string, fn RouteHandler) *Route
 	NewRoute(path string, method Code, fn RouteHandler) *Route
-	Send(req CoapRequest) (CoapResponse, error)
-	SendTo(req CoapRequest, addr *net.UDPAddr) (CoapResponse, error)
+	Send(req Request) (Response, error)
+	SendTo(req Request, addr *net.UDPAddr) (Response, error)
 	NotifyChange(resource, value string, confirm bool)
 	Dial(host string)
 	Dial6(host string)
@@ -241,7 +246,7 @@ type CoapServer interface {
 	UpdateMessageTS(msg *Message)
 
 	UpdateBlockMessageFragment(string, *Message, uint32)
-	FlushBlockMessagePayload(string) MessagePayload
+	FlushBlockMessagePayload(string) Payload
 }
 
 // Connection is a simple wrapper interface around a connection

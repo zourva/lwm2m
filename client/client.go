@@ -3,7 +3,6 @@ package client
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
-	"github.com/zourva/lwm2m/coap2"
 	. "github.com/zourva/lwm2m/core"
 	"github.com/zourva/pareto/box/meta"
 	"strings"
@@ -99,7 +98,7 @@ type LwM2MClient struct {
 	// loaded from local persistent storage.
 	store ObjectInstanceStore
 
-	coapConn coap.CoapServer
+	coapConn coap.Server
 
 	// messager to communicate with server
 	messager *MessagerClient
@@ -119,7 +118,7 @@ type LwM2MClient struct {
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
-	c.coapConn = coap2.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0])
+	c.coapConn = coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0])
 	c.messager = NewMessager(c)
 	c.bootstrapper = NewBootstrapper(c)
 	c.registrar = NewRegistrar(c)
@@ -211,7 +210,7 @@ func (c *LwM2MClient) enableService() {
 	c.machine.MoveToState(servicing)
 }
 
-func (c *LwM2MClient) onInitial(args any) {
+func (c *LwM2MClient) onInitial(_ any) {
 	// determine bootstrap or registration procedure
 	if c.bootstrapRequired() {
 		c.doBootstrap()
@@ -220,7 +219,7 @@ func (c *LwM2MClient) onInitial(args any) {
 	}
 }
 
-func (c *LwM2MClient) onBootstrapping(args any) {
+func (c *LwM2MClient) onBootstrapping(_ any) {
 	if c.bootstrapper.bootstrapped() {
 		log.Infoln("client is bootstrapped")
 		c.evtMgr.EmitEvent(EventClientBootstrapped)
@@ -236,7 +235,7 @@ func (c *LwM2MClient) onBootstrapping(args any) {
 	}
 }
 
-func (c *LwM2MClient) onRegistering(args any) {
+func (c *LwM2MClient) onRegistering(_ any) {
 	if c.registrar.registered() {
 		log.Infoln("client is registered")
 		c.evtMgr.EmitEvent(EventClientRegistered)
@@ -252,7 +251,7 @@ func (c *LwM2MClient) onRegistering(args any) {
 	}
 }
 
-func (c *LwM2MClient) onServicing(args any) {
+func (c *LwM2MClient) onServicing(_ any) {
 	log.Traceln("client is servicing")
 	if c.regRestartCounter > 3 || c.bootstrapRequired() {
 		log.Infoln("client arranged for a new register or bootstrap")
@@ -260,7 +259,7 @@ func (c *LwM2MClient) onServicing(args any) {
 	}
 }
 
-func (c *LwM2MClient) onExiting(args any) {
+func (c *LwM2MClient) onExiting(_ any) {
 	if err := c.registrar.Deregister(); err != nil {
 		log.Errorln("client unregister failed:", err)
 		return
@@ -308,7 +307,7 @@ func (c *LwM2MClient) Start() bool {
 func (c *LwM2MClient) Stop() {
 	//c.messager.Stop()
 	c.machine.Shutdown()
-	c.store.StorageManager().Close()
+	_ = c.store.StorageManager().Close()
 }
 
 func (c *LwM2MClient) Notify(data []byte) error {

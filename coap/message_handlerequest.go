@@ -5,8 +5,8 @@ import (
 	"net"
 )
 
-func handleRequest(s CoapServer, err error, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	if msg.MessageType != MessageReset {
+func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	if msg.Type != MessageReset {
 		// Unsupported Method
 		if msg.Code != Get && msg.Code != Post && msg.Code != Put && msg.Code != Delete {
 			handleReqUnsupportedMethodRequest(s, msg, conn, addr)
@@ -49,8 +49,8 @@ func handleRequest(s CoapServer, err error, msg *Message, conn *net.UDPConn, add
 
 			// Duplicate Message ID Check
 			if s.IsDuplicateMessage(msg) {
-				log.Println("Duplicate Message ID ", msg.MessageID)
-				if msg.MessageType == MessageConfirmable {
+				log.Println("Duplicate Message ID ", msg.Id)
+				if msg.Type == MessageConfirmable {
 					handleReqDuplicateMessageID(s, msg, conn, addr)
 				}
 				return
@@ -60,12 +60,12 @@ func handleRequest(s CoapServer, err error, msg *Message, conn *net.UDPConn, add
 
 			// Auto acknowledge
 			// TODO: Necessary?
-			if msg.MessageType == MessageConfirmable && route.AutoAck {
+			if msg.Type == MessageConfirmable && route.AutoAck {
 				handleRequestAutoAcknowledge(s, msg, conn, addr)
 			}
 
 			req := NewClientRequestFromMessage(msg, attrs, conn, addr)
-			if msg.MessageType == MessageConfirmable {
+			if msg.Type == MessageConfirmable {
 
 				// Observation Request
 				obsOpt := msg.GetOption(OptionObserve)
@@ -115,7 +115,7 @@ func handleRequest(s CoapServer, err error, msg *Message, conn *net.UDPConn, add
 
 						} else {
 							// TODO: Check if message is too large
-							msg = NewMessage(msg.MessageType, msg.Code, msg.MessageID)
+							msg = NewMessage(msg.Type, msg.Code, msg.Id)
 							msg.Payload = s.FlushBlockMessagePayload(addr.String())
 							req = NewClientRequestFromMessage(msg, attrs, conn, addr)
 						}
@@ -147,38 +147,38 @@ func handleRequest(s CoapServer, err error, msg *Message, conn *net.UDPConn, add
 	}
 }
 
-func handleReqUnknownCriticalOption(c CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	if msg.MessageType == MessageConfirmable {
-		SendMessageTo(c, BadOptionMessage(msg.MessageID, MessageAcknowledgment), NewUDPConnection(conn), addr)
+func handleReqUnknownCriticalOption(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	if msg.Type == MessageConfirmable {
+		SendMessageTo(c, BadOptionMessage(msg.Id, MessageAcknowledgment), NewUDPConnection(conn), addr)
 	}
 	return
 }
 
-func handleReqBadRequest(c CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	if msg.MessageType == MessageConfirmable {
-		SendMessageTo(c, BadRequestMessage(msg.MessageID, msg.MessageType), NewUDPConnection(conn), addr)
+func handleReqBadRequest(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	if msg.Type == MessageConfirmable {
+		SendMessageTo(c, BadRequestMessage(msg.Id, msg.Type), NewUDPConnection(conn), addr)
 	}
 	return
 }
 
-func handleReqContinue(c CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	if msg.MessageType == MessageConfirmable {
-		SendMessageTo(c, ContinueMessage(msg.MessageID, msg.MessageType), NewUDPConnection(conn), addr)
+func handleReqContinue(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	if msg.Type == MessageConfirmable {
+		SendMessageTo(c, ContinueMessage(msg.Id, msg.Type), NewUDPConnection(conn), addr)
 	}
 	return
 }
 
-func handleReqUnsupportedMethodRequest(c CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	ret := NotImplementedMessage(msg.MessageID, MessageAcknowledgment)
+func handleReqUnsupportedMethodRequest(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	ret := NotImplementedMessage(msg.Id, MessageAcknowledgment)
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	c.GetEvents().Message(ret, false)
 	SendMessageTo(c, ret, NewUDPConnection(conn), addr)
 }
 
-func handleReqProxyRequest(s CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+func handleReqProxyRequest(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	if !s.AllowProxyForwarding(msg, addr) {
-		SendMessageTo(s, ForbiddenMessage(msg.MessageID, MessageAcknowledgment), NewUDPConnection(conn), addr)
+		SendMessageTo(s, ForbiddenMessage(msg.Id, MessageAcknowledgment), NewUDPConnection(conn), addr)
 	}
 
 	proxyURI := msg.GetOption(OptionProxyURI).StringValue()
@@ -191,46 +191,46 @@ func handleReqProxyRequest(s CoapServer, msg *Message, conn *net.UDPConn, addr *
 	}
 }
 
-func handleReqNoMatchingRoute(s CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	ret := NotFoundMessage(msg.MessageID, MessageAcknowledgment)
+func handleReqNoMatchingRoute(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	ret := NotFoundMessage(msg.Id, MessageAcknowledgment)
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 	ret.Token = msg.Token
 
 	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
 }
 
-func handleReqNoMatchingMethod(s CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	ret := MethodNotAllowedMessage(msg.MessageID, MessageAcknowledgment)
+func handleReqNoMatchingMethod(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	ret := MethodNotAllowedMessage(msg.Id, MessageAcknowledgment)
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	s.GetEvents().Message(ret, false)
 	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
 }
 
-func handleReqUnsupportedContentFormat(s CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	ret := UnsupportedContentFormatMessage(msg.MessageID, MessageAcknowledgment)
+func handleReqUnsupportedContentFormat(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	ret := UnsupportedContentFormatMessage(msg.Id, MessageAcknowledgment)
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	s.GetEvents().Message(ret, false)
 	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
 }
 
-func handleReqDuplicateMessageID(s CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	ret := EmptyMessage(msg.MessageID, MessageReset)
+func handleReqDuplicateMessageID(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	ret := EmptyMessage(msg.Id, MessageReset)
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	s.GetEvents().Message(ret, false)
 	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
 }
 
-func handleRequestAutoAcknowledge(s CoapServer, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
-	ack := NewMessageOfType(MessageAcknowledgment, msg.MessageID)
+func handleRequestAutoAcknowledge(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	ack := NewMessageOfType(MessageAcknowledgment, msg.Id)
 
 	s.GetEvents().Message(ack, false)
 	SendMessageTo(s, ack, NewUDPConnection(conn), addr)
 }
 
-func handleReqObserve(s CoapServer, req CoapRequest, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+func handleReqObserve(s Server, req Request, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	// TODO: if server doesn't allow observing, return error
 
 	// TODO: Check if observation has been registered, if yes, remove it (observation == cancel)

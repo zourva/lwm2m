@@ -17,9 +17,9 @@ import (
 // Message ID	uint16 unique id
 func NewMessage(messageType uint8, code Code, messageID uint16) *Message {
 	return &Message{
-		MessageType: messageType,
-		MessageID:   messageID,
-		Code:        code,
+		Type: messageType,
+		Id:   messageID,
+		Code: code,
 	}
 }
 
@@ -33,8 +33,8 @@ func NewEmptyMessage(id uint16) *Message {
 // Instantiates an empty message of a specific type and message id
 func NewMessageOfType(t uint8, id uint16) *Message {
 	return &Message{
-		MessageType: t,
-		MessageID:   id,
+		Type: t,
+		Id:   id,
 	}
 }
 
@@ -67,11 +67,11 @@ func BytesToMessage(data []byte) (*Message, error) {
 		return nil, ErrInvalidCoapVersion
 	}
 
-	msg.MessageType = data[DataHeader] >> 4 & 0x03
+	msg.Type = data[DataHeader] >> 4 & 0x03
 	tokenLength := data[DataHeader] & 0x0f
 	msg.Code = Code(data[DataCode])
 
-	msg.MessageID = binary.BigEndian.Uint16(data[DataMsgIDStart:DataMsgIDEnd])
+	msg.Id = binary.BigEndian.Uint16(data[DataMsgIDStart:DataMsgIDEnd])
 
 	// Token
 	if tokenLength > 0 {
@@ -204,10 +204,10 @@ func (opts SortOptions) Less(i, j int) bool {
 // Converts a message object to a byte array. Typically done prior to transmission
 func MessageToBytes(msg *Message) ([]byte, error) {
 	messageID := []byte{0, 0}
-	binary.BigEndian.PutUint16(messageID, msg.MessageID)
+	binary.BigEndian.PutUint16(messageID, msg.Id)
 
 	buf := bytes.Buffer{}
-	buf.Write([]byte{(1 << 6) | (msg.MessageType << 4) | 0x0f&msg.GetTokenLength()})
+	buf.Write([]byte{(1 << 6) | (msg.Type << 4) | 0x0f&msg.GetTokenLength()})
 	buf.Write([]byte{byte(msg.Code)})
 	buf.Write([]byte{messageID[0]})
 	buf.Write([]byte{messageID[1]})
@@ -274,7 +274,7 @@ func getOptionHeaderValue(optValue int) (int, error) {
 
 // Validates a message object and returns any error upon validation failure
 func ValidateMessage(msg *Message) error {
-	if msg.MessageType > 3 {
+	if msg.Type > 3 {
 		return ErrUnknownMessageType
 	}
 
@@ -323,14 +323,27 @@ func (o BySequence) Less(i, j int) bool {
 	return o[i].Sequence < o[j].Sequence
 }
 
-// A Message object represents a CoAP payload
+// A Message object represents a CoAP payload.
+//
+//	 0                   1                   2                   3
+//	 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+//	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//	|Ver| T |  TKL  |      Code     |          Message ID           |
+//	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//	|   Token (if any, TKL bytes) ...
+//	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//	|   Options (if any) ...
+//	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//	|1 1 1 1 1 1 1 1|    Payload (if any) ...
+//	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 type Message struct {
-	MessageType uint8
-	Code        Code
-	MessageID   uint16
-	Payload     MessagePayload
-	Token       []byte
-	Options     []Option
+	//Version uint8
+	Type    uint8
+	Code    Code
+	Id      uint16
+	Token   []byte
+	Options []Option
+	Payload Payload
 }
 
 func (m *Message) GetAcceptedContent() MediaType {
@@ -347,7 +360,7 @@ func (m *Message) GetCodeString() string {
 }
 
 func (m *Message) GetMethod() uint8 {
-	return (byte(m.Code) & 0x1f)
+	return byte(m.Code) & 0x1f
 }
 
 func (m *Message) GetTokenLength() uint8 {
@@ -359,7 +372,7 @@ func (m *Message) GetTokenString() string {
 }
 
 // Returns an array of options given an option code
-func (m Message) GetOptions(id OptionCode) []Option {
+func (m *Message) GetOptions(id OptionCode) []Option {
 	var opts []Option
 	for _, val := range m.Options {
 		if val.GetCode() == id {
@@ -370,7 +383,7 @@ func (m Message) GetOptions(id OptionCode) []Option {
 }
 
 // Returns the first option found for a given option code
-func (m Message) GetOption(id OptionCode) Option {
+func (m *Message) GetOption(id OptionCode) Option {
 	for _, val := range m.Options {
 		if val.GetCode() == id {
 			return val
@@ -380,7 +393,7 @@ func (m Message) GetOption(id OptionCode) Option {
 }
 
 // Attempts to return the string value of an Option
-func (m Message) GetOptionsAsString(id OptionCode) []string {
+func (m *Message) GetOptionsAsString(id OptionCode) []string {
 	opts := m.GetOptions(id)
 
 	var str []string
@@ -400,7 +413,7 @@ func (m *Message) GetLocationPath() string {
 }
 
 // Returns the string value of the Uri Path Options by joining and defining a / separator
-func (m Message) GetURIPath() string {
+func (m *Message) GetURIPath() string {
 	opts := m.GetOptionsAsString(OptionURIPath)
 
 	return "/" + strings.Join(opts, "/")
@@ -431,8 +444,8 @@ func (m *Message) AddOptions(opts []Option) {
 	}
 }
 
-func (c *Message) SetBlock1Option(opt *Block1Option) {
-	c.AddOption(OptionBlock1, opt.GetValue())
+func (m *Message) SetBlock1Option(opt *Block1Option) {
+	m.AddOption(OptionBlock1, opt.GetValue())
 }
 
 // Copies the given list of options from another message to this one
@@ -501,7 +514,7 @@ func valueToBytes(value interface{}) []byte {
 }
 
 // Returns the string value for a Message Payload
-func PayloadAsString(p MessagePayload) string {
+func PayloadAsString(p Payload) string {
 	if p == nil {
 		return ""
 	}

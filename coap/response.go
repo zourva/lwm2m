@@ -2,11 +2,11 @@ package coap
 
 import "strings"
 
-func NoResponse() CoapResponse {
+func NoResponse() Response {
 	return NilResponse{}
 }
 
-type CoapResponse interface {
+type Response interface {
 	GetMessage() *Message
 	GetError() error
 	GetPayload() []byte
@@ -33,7 +33,7 @@ func (c NilResponse) GetURIQuery(q string) string {
 }
 
 // Creates a new Response object with a Message object and any error messages
-func NewResponse(msg *Message, err error) CoapResponse {
+func NewResponse(msg *Message, err error) Response {
 	resp := &DefaultResponse{
 		msg: msg,
 		err: err,
@@ -43,7 +43,7 @@ func NewResponse(msg *Message, err error) CoapResponse {
 }
 
 // Creates a new response object with a Message object
-func NewResponseWithMessage(msg *Message) CoapResponse {
+func NewResponseWithMessage(msg *Message) Response {
 	resp := &DefaultResponse{
 		msg: msg,
 	}

@@ -54,12 +54,12 @@ func (r *InfoReporter) Notify(observationId string, value []byte) error {
 		//return errors.New("invalid observation id")
 	}
 
-	return r.messager.SendNotify(observationId, value)
+	return r.messager.Notify(observationId, value)
 }
 
 func (r *InfoReporter) Send(value []byte) ([]byte, error) {
 	req := r.messager.NewConRequestOpaque(coap.Post, core.SendReportUri, value)
-	rsp, err := r.messager.SendRequest(req)
+	rsp, err := r.messager.Send(req)
 	if err != nil {
 		r.client.incRegRestartCounter()
 		log.Errorln("send opaque request failed: %v, ", err)
