@@ -104,7 +104,7 @@ func (c *registeredClient) Read(oid ObjectID, oiId InstanceID, rid ResourceID, r
 	}
 
 	req := c.messager.NewRequest(coap.MessageConfirmable, coap.Get, mt, uri)
-	rsp, err := c.messager.SendRequestToClient(c.Address(), req)
+	rsp, err := c.messager.SendRequest(c.Address(), req)
 	if err != nil {
 		log.Errorln("read operation failed:", err)
 		return err

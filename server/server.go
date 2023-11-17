@@ -78,6 +78,7 @@ func New(name string, opts ...Option) *LwM2MServer {
 }
 
 type ClientBootstrapHandler = func(ctx BootstrapContext) error
+type ClientBootstrapPackHandler = func(BootstrapContext) ([]byte, error)
 type ClientRegHandler = func(info *RegistrationInfo) ([]byte, error)
 type InfoReportHandler = func(c RegisteredClient, data []byte) ([]byte, error)
 
@@ -86,7 +87,7 @@ type LwM2MServer struct {
 	options *Options
 
 	// session layer
-	coapConn coap.CoapServer
+	coapConn coap.Server
 	messager *ServerMessager
 
 	evtMgr *EventManager
@@ -99,36 +100,22 @@ type LwM2MServer struct {
 
 	onBootstrapInit ClientBootstrapHandler
 	onBootstrapping ClientBootstrapHandler
+	onBootstrapPack ClientBootstrapPackHandler
 
 	registerManager RegisterManager
 }
 
 func (s *LwM2MServer) Serve() {
-	// setup hooks
-	s.coapConn.OnMessage(func(msg *coap.Message, inbound bool) {
-		s.options.stats.IncrementRequestCount()
-	})
-
-	// register route handlers
-	s.coapConn.Post("/bs", s.messager.onClientBootstrap)
-	s.coapConn.Get("/bspack", s.messager.onClientBootstrapPack)
-
-	s.coapConn.Post("/rd", s.messager.onClientRegister)
-	s.coapConn.Put("/rd/:id", s.messager.onClientUpdate)
-	s.coapConn.Delete("/rd/:id", s.messager.onClientDeregister)
-
-	s.coapConn.Post("/dp", s.messager.onSendInfo)
-
-	go s.coapConn.Start()
+	s.messager.Start()
 
 	s.evtMgr.EmitEvent(EventServerStarted)
 
-	log.Infoln("lwm2m server started at", s.coapConn.GetLocalAddress().String())
+	log.Infoln("lwm2m server started")
 }
 
 // Shutdown shuts down the server gracefully.
 func (s *LwM2MServer) Shutdown() {
-	s.coapConn.Stop()
+	s.messager.Stop()
 	//s.ClearSessions()
 
 	s.evtMgr.EmitEvent(EventServerStopped)
@@ -162,6 +149,10 @@ func (s *LwM2MServer) SetOnClientBootstrapInit(handler ClientBootstrapHandler) {
 
 func (s *LwM2MServer) SetOnClientBootstrapping(handler ClientBootstrapHandler) {
 	s.onBootstrapping = handler
+}
+
+func (s *LwM2MServer) SetOnClientBootstrapPack(handler ClientBootstrapPackHandler) {
+	s.onBootstrapPack = handler
 }
 
 func (s *LwM2MServer) SetOnClientRegistered(handler ClientRegHandler) {

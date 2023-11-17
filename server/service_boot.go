@@ -79,8 +79,7 @@ type BootstrapContext interface {
 // BootstrapService implements application layer logic
 // for client bootstrap procedure at server side.
 type BootstrapService struct {
-	server   *LwM2MServer
-	messager *ServerMessager
+	server *LwM2MServer
 	// TODO: lock protection?
 	clients map[string]BootstrapContext //name -> addr
 }
@@ -96,40 +95,55 @@ func (b *BootstrapService) OnRequest(name, addr string) error {
 		return NotAcceptable
 	}
 
-	ctx := b.save(name, addr)
-
-	err := b.server.onBootstrapInit(ctx)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		err = b.server.onBootstrapping(ctx)
-		if err != nil {
-			log.Errorln("bootstrap failed in procedure:", err)
-		}
-	}()
-
-	log.Infof("bootstrap request from %s accepted", name)
-
-	return nil
-}
-
-func (b *BootstrapService) OnPackRequest(ep string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *BootstrapService) save(name, addr string) BootstrapContext {
 	ctx := &bootstrapContext{
 		owner:  b,
 		name:   name,
 		addr:   addr,
 		create: time.Now(),
 	}
-	b.clients[name] = ctx
 
-	return ctx
+	b.save(ctx)
+
+	err := b.server.onBootstrapInit(ctx)
+	if err != nil {
+		return err
+	}
+
+	time.AfterFunc(500*time.Millisecond, func() {
+		err = b.server.onBootstrapping(ctx)
+		if err != nil {
+			log.Errorln("bootstrap failed in procedure:", err)
+		}
+	})
+
+	log.Infof("bootstrap request from %s accepted", name)
+
+	return nil
+}
+
+func (b *BootstrapService) OnPackRequest(name string) ([]byte, error) {
+	if b.server.onBootstrapPack == nil {
+		return nil, NotImplemented
+	}
+
+	ctx := &bootstrapContext{
+		owner:  b,
+		name:   name,
+		create: time.Now(),
+	}
+
+	pack, err := b.server.onBootstrapPack(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("bootstrap-pack-request from %s accepted", name)
+
+	return pack, nil
+}
+
+func (b *BootstrapService) save(ctx BootstrapContext) {
+	b.clients[ctx.Name()] = ctx
 }
 
 func (b *BootstrapService) get(name string) BootstrapContext {
@@ -138,9 +152,8 @@ func (b *BootstrapService) get(name string) BootstrapContext {
 
 func NewBootstrapService(server *LwM2MServer) BootstrapServer {
 	s := &BootstrapService{
-		server:   server,
-		messager: server.messager,
-		clients:  make(map[string]BootstrapContext),
+		server:  server,
+		clients: make(map[string]BootstrapContext),
 	}
 
 	return s
@@ -171,21 +184,21 @@ func (b *bootstrapContext) RespondBootstrapRequest(err error) {
 }
 
 func (b *bootstrapContext) Read(oid ObjectID) ([]byte, error) {
-	return b.owner.messager.Read(b.addr, oid, NoneID, NoneID, NoneID)
+	return b.owner.server.messager.Read(b.addr, oid, NoneID, NoneID, NoneID)
 }
 
 func (b *bootstrapContext) Discover(oid ObjectID) ([]byte, error) {
-	return b.owner.messager.Discover(b.addr, oid)
+	return b.owner.server.messager.Discover(b.addr, oid)
 }
 
 func (b *bootstrapContext) Write(oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
-	return b.owner.messager.Write(b.addr, oid, oiId, rid, value)
+	return b.owner.server.messager.Write(b.addr, oid, oiId, rid, value)
 }
 
 func (b *bootstrapContext) Delete(oid ObjectID, oiId InstanceID) error {
-	return b.owner.messager.Delete(b.addr, oid, oiId)
+	return b.owner.server.messager.Delete(b.addr, oid, oiId)
 }
 
 func (b *bootstrapContext) Finish() error {
-	return b.owner.messager.Finish(b.addr)
+	return b.owner.server.messager.Finish(b.addr)
 }
