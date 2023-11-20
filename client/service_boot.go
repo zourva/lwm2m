@@ -208,7 +208,7 @@ func (r *Bootstrapper) bootstrapped() bool {
 	return r.getState() == bsBootstrapDone
 }
 
-func (r *Bootstrapper) onInitial(args any) {
+func (r *Bootstrapper) onInitial(_ any) {
 	if err := r.PackRequest(); err != nil {
 		log.Errorf("bootstrap failed: %v", err)
 		return
@@ -219,7 +219,7 @@ func (r *Bootstrapper) onInitial(args any) {
 	r.machine.MoveToState(bootstrapping)
 }
 
-func (r *Bootstrapper) onBootstrapping(args any) {
+func (r *Bootstrapper) onBootstrapping(_ any) {
 	//wait for Bootstrap-Finish
 	if r.bootstrapped() {
 		log.Infof("bootstrap done")
@@ -227,7 +227,7 @@ func (r *Bootstrapper) onBootstrapping(args any) {
 	}
 }
 
-func (r *Bootstrapper) onExiting(args any) {
+func (r *Bootstrapper) onExiting(_ any) {
 	log.Infof("bootstraper exiting")
 }
 
