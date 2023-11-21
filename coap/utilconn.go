@@ -54,7 +54,7 @@ func SendMessageTo(c Server, msg *Message, conn Connection, addr *net.UDPAddr) (
 }
 
 func MessageSizeAllowed(req Request) bool {
-	msg := req.GetMessage()
+	msg := req.Message()
 	b, _ := MessageToBytes(msg)
 
 	if len(b) > 65536 {

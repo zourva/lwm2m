@@ -7,32 +7,32 @@ func NoResponse() Response {
 }
 
 type Response interface {
-	GetMessage() *Message
-	GetError() error
-	GetPayload() []byte
-	GetURIQuery(q string) string
+	Message() *Message
+	Error() error
+	Payload() []byte
+	UriQuery(q string) string
 }
 
 type NilResponse struct {
 }
 
-func (c NilResponse) GetMessage() *Message {
+func (c NilResponse) Message() *Message {
 	return nil
 }
 
-func (c NilResponse) GetError() error {
+func (c NilResponse) Error() error {
 	return nil
 }
 
-func (c NilResponse) GetPayload() []byte {
+func (c NilResponse) Payload() []byte {
 	return nil
 }
 
-func (c NilResponse) GetURIQuery(q string) string {
+func (c NilResponse) UriQuery(q string) string {
 	return ""
 }
 
-// Creates a new Response object with a Message object and any error messages
+// NewResponse creates a new Response object with a Message object and any error messages
 func NewResponse(msg *Message, err error) Response {
 	resp := &DefaultResponse{
 		msg: msg,
@@ -42,7 +42,7 @@ func NewResponse(msg *Message, err error) Response {
 	return resp
 }
 
-// Creates a new response object with a Message object
+// NewResponseWithMessage creates a new response object with a Message object
 func NewResponseWithMessage(msg *Message) Response {
 	resp := &DefaultResponse{
 		msg: msg,
@@ -56,20 +56,20 @@ type DefaultResponse struct {
 	err error
 }
 
-func (c *DefaultResponse) GetMessage() *Message {
+func (c *DefaultResponse) Message() *Message {
 	return c.msg
 }
 
-func (c *DefaultResponse) GetError() error {
+func (c *DefaultResponse) Error() error {
 	return c.err
 }
 
-func (c *DefaultResponse) GetPayload() []byte {
-	return c.GetMessage().Payload.GetBytes()
+func (c *DefaultResponse) Payload() []byte {
+	return c.Message().Payload.GetBytes()
 }
 
-func (c *DefaultResponse) GetURIQuery(q string) string {
-	qs := c.GetMessage().GetOptionsAsString(OptionURIQuery)
+func (c *DefaultResponse) UriQuery(q string) string {
+	qs := c.Message().GetOptionsAsString(OptionURIQuery)
 
 	for _, o := range qs {
 		ps := strings.Split(o, "=")

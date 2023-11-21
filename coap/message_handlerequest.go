@@ -74,7 +74,7 @@ func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *n
 				}
 			}
 
-			opt := req.GetMessage().GetOption(OptionBlock1)
+			opt := req.Message().GetOption(OptionBlock1)
 			if opt != nil {
 				blockOpt := Block1OptionFromOption(opt)
 
@@ -130,8 +130,8 @@ func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *n
 			resp := route.Handler(req)
 			_, nilresponse := resp.(NilResponse)
 			if !nilresponse {
-				respMsg := resp.GetMessage()
-				respMsg.Token = req.GetMessage().Token
+				respMsg := resp.Message()
+				respMsg.Token = req.Message().Token
 
 				// TODO: Validate Message before sending (e.g missing messageId)
 				err := ValidateMessage(respMsg)
@@ -249,5 +249,5 @@ func handleReqObserve(s Server, req Request, msg *Message, conn *net.UDPConn, ad
 		s.GetEvents().Observe(resource, msg)
 	}
 
-	req.GetMessage().AddOption(OptionObserve, 1)
+	req.Message().AddOption(OptionObserve, 1)
 }

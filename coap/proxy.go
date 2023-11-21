@@ -38,7 +38,7 @@ func COAPProxyHandler(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAd
 
 		msg.RemoveOptions(OptionProxyURI)
 		req := NewRequestFromMessage(msg)
-		req.SetRequestURI(parsedURL.RequestURI())
+		req.SetRequestUri(parsedURL.RequestURI())
 
 		response, err := client.Send(req)
 		if err != nil {
@@ -47,7 +47,7 @@ func COAPProxyHandler(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAd
 			return
 		}
 
-		_, err = SendMessageTo(c, response.GetMessage(), NewUDPConnection(conn), addr)
+		_, err = SendMessageTo(c, response.Message(), NewUDPConnection(conn), addr)
 		if err != nil {
 			log.Println("Error occured responding to proxy request")
 			client.Stop()
@@ -97,12 +97,12 @@ func HTTPProxyHandler(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAd
 	}
 
 	// TODO: Check payload length against Size1 options
-	if len(respMsg.GetMessage().Payload.String()) > MaxPacketSize {
+	if len(respMsg.Message().Payload.String()) > MaxPacketSize {
 		SendMessageTo(c, BadGatewayMessage(msg.Id, MessageAcknowledgment), NewUDPConnection(conn), addr)
 		return
 	}
 
-	_, err = SendMessageTo(c, respMsg.GetMessage(), NewUDPConnection(conn), addr)
+	_, err = SendMessageTo(c, respMsg.Message(), NewUDPConnection(conn), addr)
 	if err != nil {
 		println(err.Error())
 	}

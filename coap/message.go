@@ -11,14 +11,14 @@ import (
 	"strings"
 )
 
-// Instantiates a new message object
+// NewMessage instantiates a new message object
 // messageType (e.g. Confirm/Non-Confirm)
 // CoAP code	404 - Not found etc
 // Message ID	uint16 unique id
-func NewMessage(messageType uint8, code Code, messageID uint16) *Message {
+func NewMessage(kind uint8, code Code, id uint16) *Message {
 	return &Message{
-		Type: messageType,
-		Id:   messageID,
+		Type: kind,
+		Id:   id,
 		Code: code,
 	}
 }

@@ -56,8 +56,8 @@ func CoreResourcesFromString(str string) []*CoreResource {
 	return resources
 }
 
-// CoapCodeToString returns the string representation of a Code
-func CoapCodeToString(code Code) string {
+// CodeString returns the string representation of a Code
+func CodeString(code Code) string {
 	switch code {
 	case Get:
 		return "GET"

@@ -192,7 +192,7 @@ func (c *registeredClient) createObjects(objInstances []*coap.CoreResource) {
 //
 //	uri := fmt.Sprintf("/%d/%d/%d", obj, objInst, res)
 //	req := coap.NewRequest(coap.MessageConfirmable, coap.Get, coap.GenerateMessageID())
-//	req.SetRequestURI(uri)
+//	req.SetRequestUri(uri)
 //
 //	resourceDefinition := c.GetObject(obj).Class().Resource(res)
 //	if resourceDefinition.Multiple() {
@@ -207,7 +207,7 @@ func (c *registeredClient) createObjects(objInstances []*coap.CoreResource) {
 //		return nil, err
 //	}
 //	responseValue, _ := utils.DecodeResourceValue(
-//		res, response.GetMessage().Payload.ToBytes(), resourceDefinition)
+//		res, response.Message().Payload.ToBytes(), resourceDefinition)
 //
 //	return responseValue, nil
 //}

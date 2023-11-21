@@ -95,8 +95,8 @@ func (m *ServerMessager) Stop() {
 //	 uri:
 //		/bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
 func (m *ServerMessager) onClientBootstrap(req coap.Request) coap.Response {
-	ep := req.GetURIQuery("ep")
-	addr := req.GetAddress().String()
+	ep := req.UriQuery("ep")
+	addr := req.Address().String()
 	err := m.bootstrapService.OnRequest(ep, addr)
 	code := coap.CodeChanged
 	if err != nil {
@@ -112,7 +112,7 @@ func (m *ServerMessager) onClientBootstrap(req coap.Request) coap.Response {
 //	 uri:
 //		/bspack?ep={Endpoint Client Name}
 func (m *ServerMessager) onClientBootstrapPack(req coap.Request) coap.Response {
-	ep := req.GetURIQuery("ep")
+	ep := req.UriQuery("ep")
 	rsp, err := m.bootstrapService.OnPackRequest(ep)
 	code := coap.CodeContent
 	if err != nil {
@@ -130,15 +130,15 @@ func (m *ServerMessager) onClientBootstrapPack(req coap.Request) coap.Response {
 //	   b/Q/sms/pid are optional.
 //	body: </1/0>,... which is optional.
 func (m *ServerMessager) onClientRegister(req coap.Request) coap.Response {
-	ep := req.GetURIQuery("ep")
-	lt, _ := strconv.Atoi(req.GetURIQuery("lt"))
-	lwm2m := req.GetURIQuery("lwm2m")
-	binding := req.GetURIQuery("b")
+	ep := req.UriQuery("ep")
+	lt, _ := strconv.Atoi(req.UriQuery("lt"))
+	lwm2m := req.UriQuery("lwm2m")
+	binding := req.UriQuery("b")
 
-	list := coap.CoreResourcesFromString(req.GetMessage().Payload.String())
+	list := coap.CoreResourcesFromString(req.Message().Payload.String())
 	info := &RegistrationInfo{
 		Name:            ep,
-		Address:         req.GetAddress().String(),
+		Address:         req.Address().String(),
 		Lifetime:        lt,
 		LwM2MVersion:    lwm2m,
 		BindingMode:     binding,
@@ -156,7 +156,7 @@ func (m *ServerMessager) onClientRegister(req coap.Request) coap.Response {
 	}
 
 	rsp := m.NewPiggybackedResponse(req, code, coap.NewEmptyPayload())
-	rsp.GetMessage().AddOption(coap.OptionLocationPath, "rd/"+clientId)
+	rsp.Message().AddOption(coap.OptionLocationPath, "rd/"+clientId)
 
 	return rsp
 }
@@ -167,11 +167,11 @@ func (m *ServerMessager) onClientRegister(req coap.Request) coap.Response {
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
 func (m *ServerMessager) onClientUpdate(req coap.Request) coap.Response {
-	id := req.GetAttribute("id")
-	lt, _ := strconv.Atoi(req.GetURIQuery("lt"))
-	binding := req.GetURIQuery("b")
+	id := req.Attribute("id")
+	lt, _ := strconv.Atoi(req.UriQuery("lt"))
+	binding := req.UriQuery("b")
 
-	list := coap.CoreResourcesFromString(req.GetMessage().Payload.String())
+	list := coap.CoreResourcesFromString(req.Message().Payload.String())
 	info := &RegistrationInfo{
 		Location:        id,
 		Lifetime:        lt,
@@ -195,7 +195,7 @@ func (m *ServerMessager) onClientUpdate(req coap.Request) coap.Response {
 //	uri: /{location}
 //	 where location has a format of /rd/{id}
 func (m *ServerMessager) onClientDeregister(req coap.Request) coap.Response {
-	id := req.GetAttribute("id")
+	id := req.Attribute("id")
 
 	m.registerService.OnDeregister(id)
 
@@ -207,12 +207,12 @@ func (m *ServerMessager) onClientDeregister(req coap.Request) coap.Response {
 //	uri: /dp
 //	body: implementation-specific.
 func (m *ServerMessager) onSendInfo(req coap.Request) coap.Response {
-	data := req.GetMessage().Payload.GetBytes()
+	data := req.Message().Payload.GetBytes()
 	// check resource contained in reported list
 	// check server granted read access
 
 	// get registered client bound to this info
-	c := m.registerManager.GetByAddr(req.GetAddress().String())
+	c := m.registerManager.GetByAddr(req.Address().String())
 	if c == nil {
 		log.Errorf("not registered or address changed, " +
 			"a new registration is needed and the info sent is ignored")
@@ -239,13 +239,13 @@ func (m *ServerMessager) Read(peer string, oid ObjectID, oiId InstanceID, rid Re
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeContent {
+	if rsp.Message().Code == coap.CodeContent {
 		log.Debugf("read operation against %s done", uri)
 
-		return rsp.GetMessage().Payload.GetBytes(), nil
+		return rsp.Message().Payload.GetBytes(), nil
 	}
 
-	return nil, GetCodeError(rsp.GetMessage().Code)
+	return nil, GetCodeError(rsp.Message().Code)
 }
 
 func (m *ServerMessager) Discover(peer string, oid ObjectID) ([]byte, error) {
@@ -263,12 +263,12 @@ func (m *ServerMessager) Write(peer string, oid ObjectID, oiId InstanceID, rid R
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeChanged {
+	if rsp.Message().Code == coap.CodeChanged {
 		log.Debugf("write operation against %s done", uri)
 		return nil
 	}
 
-	return GetCodeError(rsp.GetMessage().Code)
+	return GetCodeError(rsp.Message().Code)
 }
 
 func (m *ServerMessager) Delete(peer string, oid ObjectID, oiId InstanceID) error {
@@ -281,12 +281,12 @@ func (m *ServerMessager) Delete(peer string, oid ObjectID, oiId InstanceID) erro
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeDeleted {
+	if rsp.Message().Code == coap.CodeDeleted {
 		log.Debugf("delete operation against %s done", uri)
 		return nil
 	}
 
-	return GetCodeError(rsp.GetMessage().Code)
+	return GetCodeError(rsp.Message().Code)
 }
 
 func (m *ServerMessager) Finish(peer string) error {
@@ -298,12 +298,12 @@ func (m *ServerMessager) Finish(peer string) error {
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeChanged {
+	if rsp.Message().Code == coap.CodeChanged {
 		log.Debugf("bootstrap finish operation done")
 		return nil
 	}
 
-	return GetCodeError(rsp.GetMessage().Code)
+	return GetCodeError(rsp.Message().Code)
 }
 
 func (m *ServerMessager) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {

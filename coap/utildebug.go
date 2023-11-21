@@ -21,7 +21,7 @@ func PrintOptions(msg *Message) {
 func PrintMessage(msg *Message) {
 	log.Println("= = = = = = = = = = = = = = = = ")
 	log.Println("Code: ", msg.Code)
-	log.Println("Code String: ", CoapCodeToString(msg.Code))
+	log.Println("Code String: ", CodeString(msg.Code))
 	log.Println("MessageId: ", msg.Id)
 	log.Println("MessageType: ", msg.Type)
 	log.Println("Token: ", string(msg.Token))

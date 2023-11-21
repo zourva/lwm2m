@@ -95,7 +95,7 @@ func (s *DefaultCoapServer) GetEvents() *Events {
 
 func (s *DefaultCoapServer) Start() {
 	var discoveryRoute RouteHandler = func(req Request) Response {
-		msg := req.GetMessage()
+		msg := req.Message()
 
 		ack := ContentMessage(msg.Id, MessageAcknowledgment)
 		ack.Token = make([]byte, len(msg.Token))
@@ -294,7 +294,7 @@ func (s *DefaultCoapServer) NewRoute(path string, method Code, fn RouteHandler) 
 }
 
 func (s *DefaultCoapServer) Send(req Request) (Response, error) {
-	msg := req.GetMessage()
+	msg := req.Message()
 	opt := msg.GetOption(OptionBlock1)
 
 	if s.localConn == nil {
@@ -362,7 +362,7 @@ func (s *DefaultCoapServer) Send(req Request) (Response, error) {
 						wg.Done()
 						return nil, err
 					}
-					s.events.Message(response.GetMessage(), true)
+					s.events.Message(response.Message(), true)
 					currSeq = currSeq + 1
 
 				} else {
@@ -381,7 +381,7 @@ func (s *DefaultCoapServer) Send(req Request) (Response, error) {
 		s.events.Error(err)
 		return response, err
 	}
-	s.events.Message(response.GetMessage(), true)
+	s.events.Message(response.Message(), true)
 
 	return response, err
 }
@@ -393,7 +393,7 @@ func (s *DefaultCoapServer) storeNewOutgoingBlockMessage(client string, payload 
 }
 
 func (s *DefaultCoapServer) SendTo(req Request, addr *net.UDPAddr) (Response, error) {
-	return SendMessageTo(s, req.GetMessage(), NewUDPConnection(s.localConn), addr)
+	return SendMessageTo(s, req.Message(), NewUDPConnection(s.localConn), addr)
 }
 
 func (s *DefaultCoapServer) NotifyChange(resource, value string, confirm bool) {
@@ -411,9 +411,9 @@ func (s *DefaultCoapServer) NotifyChange(resource, value string, confirm bool) {
 		for _, r := range t {
 			req.SetToken(r.Token)
 			req.SetStringPayload(value)
-			req.SetRequestURI(r.Resource)
+			req.SetRequestUri(r.Resource)
 			r.NotifyCount++
-			req.GetMessage().AddOption(OptionObserve, r.NotifyCount)
+			req.Message().AddOption(OptionObserve, r.NotifyCount)
 
 			go s.SendTo(req, r.Addr)
 		}
