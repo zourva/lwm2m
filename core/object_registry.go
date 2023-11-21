@@ -1,5 +1,7 @@
 package core
 
+import "github.com/zourva/lwm2m/objects"
+
 //type OperationType = int
 //
 //// Operation Types
@@ -133,7 +135,7 @@ func NewObjectRegistry(descriptorsGroup ...[]string) ObjectRegistry {
 		objects: make(ObjectMap),
 	}
 
-	//descriptorsGroup = append(descriptorsGroup, objects.GetOMAObjectDescriptors())
+	descriptorsGroup = append(descriptorsGroup, objects.GetOMAObjectDescriptors())
 
 	var providers []ObjectProvider
 	for _, descriptors := range descriptorsGroup {

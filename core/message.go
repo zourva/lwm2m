@@ -15,7 +15,7 @@ type Messager interface {
 	NewGetRequest(uri string) coap.Request
 	NewPiggybackedResponse(coap.Request, coap.Code, coap.Payload) coap.Response
 	Send(req coap.Request) (coap.Response, error)
-	Notify(obsId string, data []byte) error
+	Notify(key string, value []byte) error
 }
 
 type BaseMessager struct {
@@ -32,8 +32,8 @@ type BaseMessager struct {
 //	   |<-----------------+
 //	   |                  |
 func (m *BaseMessager) NewPiggybackedResponse(req coap.Request, code coap.Code, payload coap.Payload) coap.Response {
-	msg := coap.NewMessageOfType(coap.MessageAcknowledgment, req.GetMessage().Id)
-	msg.Token = req.GetMessage().Token
+	msg := coap.NewMessageOfType(coap.MessageAcknowledgment, req.Message().Id)
+	msg.Token = req.Message().Token
 	msg.Code = code
 
 	if payload != nil {
@@ -61,7 +61,7 @@ func (m *BaseMessager) NewConRequestOpaque(method coap.Code, uri string, payload
 
 func (m *BaseMessager) NewRequest(t uint8, c coap.Code, mt coap.MediaType, uri string) coap.Request {
 	req := coap.NewRequest(t, c, coap.GenerateMessageID())
-	req.SetRequestURI(uri)
+	req.SetRequestUri(uri)
 	req.SetMediaType(mt)
 	return req
 }

@@ -7,14 +7,24 @@ import log "github.com/sirupsen/logrus"
 type EventType = int
 
 const (
-	EventClientBootstrapped   EventType = iota // issued when client is bootstrapped
-	EventClientRegistered                      // issued when client is registered
-	EventClientRegUpdated                      // issued when client registration info is updated
-	EventClientUnregistered                    // issued when client is unregistered
-	EventClientDevInfoChanged                  // issued when any resource of client is operated
-	EventClientObserved                        // issued when any resource of client is observed
-	EventClientReported                        // issued when any resource of client is changed and reported
-	EventClientAbnormal                        // issued when any error happened
+	EventClientDummy               EventType = iota
+	EventClientBeforeBootstrap               // issued before client starts bootstrapping
+	EventClientBootstrapped                  // issued when client is bootstrapped
+	EventClientBeforeRegister                //
+	EventClientRegistered                    // issued when client is registered
+	EventClientBeforeUpdate                  //
+	EventClientRegUpdated                    // issued when client registration info is updated
+	EventClientBeforeUnregister              //
+	EventClientUnregistered                  // issued when client is unregistered
+	EventClientBeforeDevInfoChange           //
+	EventClientDevInfoChanged                // issued when any resource of client is operated
+	EventClientBeforeObserve                 //
+	EventClientObserved                      // issued when any resource of client is observed
+	EventClientBeforeObserveCancel           //
+	EventClientObserveCancelled              //
+	EventClientBeforeReport                  //
+	EventClientReported                      // issued when any resource of client is changed and reported
+	EventClientAbnormal                      // issued when any error happened
 
 	EventServerStarted
 	EventServerStopped
