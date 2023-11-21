@@ -91,11 +91,13 @@ func (m *MessagerClient) Start() {
 	s.Start()
 }
 
-func (m *MessagerClient) PauseAcceptRequests() {
+// PauseUserPlane stops accepting requests from servers.
+func (m *MessagerClient) PauseUserPlane() {
 	m.mute = true
 }
 
-func (m *MessagerClient) ResumeAcceptRequests() {
+// ResumeUserPlane resumes accepting requests from servers.
+func (m *MessagerClient) ResumeUserPlane() {
 	m.mute = false
 }
 
@@ -116,7 +118,7 @@ func (m *MessagerClient) devController() DeviceControlClient {
 }
 
 func (m *MessagerClient) getOID(req coap.Request) ObjectID {
-	objectId := req.GetAttributeAsInt("oid")
+	objectId := req.AttributeAsInt("oid")
 	return ObjectID(objectId)
 }
 
@@ -124,9 +126,9 @@ func (m *MessagerClient) getOID(req coap.Request) ObjectID {
 func (m *MessagerClient) getOIID(req coap.Request) InstanceID {
 	instanceId := NoneID
 
-	instance := req.GetAttribute("oiid")
+	instance := req.Attribute("oiid")
 	if instance != "" {
-		instanceId = InstanceID(req.GetAttributeAsInt("oiid"))
+		instanceId = InstanceID(req.AttributeAsInt("oiid"))
 	}
 
 	return instanceId
@@ -136,9 +138,9 @@ func (m *MessagerClient) getOIID(req coap.Request) InstanceID {
 func (m *MessagerClient) getRID(req coap.Request) ResourceID {
 	resourceId := NoneID
 
-	resource := req.GetAttribute("rid")
+	resource := req.Attribute("rid")
 	if resource != "" {
-		resourceId = ResourceID(req.GetAttributeAsInt("rid"))
+		resourceId = ResourceID(req.AttributeAsInt("rid"))
 	}
 
 	return resourceId
@@ -148,9 +150,9 @@ func (m *MessagerClient) getRID(req coap.Request) ResourceID {
 func (m *MessagerClient) getRIId(req coap.Request) InstanceID {
 	instanceId := NoneID
 
-	instance := req.GetAttribute("riid")
+	instance := req.Attribute("riid")
 	if instance != "" {
-		instanceId = InstanceID(req.GetAttributeAsInt("riid"))
+		instanceId = InstanceID(req.AttributeAsInt("riid"))
 	}
 
 	return instanceId
@@ -193,7 +195,7 @@ func (m *MessagerClient) onBootstrapFinish(req coap.Request) coap.Response {
 ////// device management and service enablement handlers
 
 func (m *MessagerClient) onServerCreate(req coap.Request) coap.Response {
-	log.Debugln("receive create request:", req.GetMessage().GetURIPath())
+	log.Debugln("receive create request:", req.Message().GetURIPath())
 
 	objectId := m.getOID(req)
 	err := m.devController().OnCreate(objectId, String(""))
@@ -202,7 +204,7 @@ func (m *MessagerClient) onServerCreate(req coap.Request) coap.Response {
 }
 
 func (m *MessagerClient) onServerRead(req coap.Request) coap.Response {
-	log.Debugln("receive read request:", req.GetMessage().GetURIPath())
+	log.Debugln("receive read request:", req.Message().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -217,13 +219,13 @@ func (m *MessagerClient) onServerRead(req coap.Request) coap.Response {
 	}
 
 	rsp := m.NewPiggybackedResponse(req, GetErrorCode(err), payload)
-	rsp.GetMessage().AddOption(coap.OptionContentFormat, m.getMediaTypeFromValue(value))
+	rsp.Message().AddOption(coap.OptionContentFormat, m.getMediaTypeFromValue(value))
 
 	return rsp
 }
 
 func (m *MessagerClient) onServerDelete(req coap.Request) coap.Response {
-	log.Debugln("receive delete request:", req.GetMessage().GetURIPath())
+	log.Debugln("receive delete request:", req.Message().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -236,11 +238,11 @@ func (m *MessagerClient) onServerDelete(req coap.Request) coap.Response {
 }
 
 func (m *MessagerClient) onServerDiscover(req coap.Request) {
-	log.Debugln("receive discover request:", req.GetMessage().GetURIPath())
+	log.Debugln("receive discover request:", req.Message().GetURIPath())
 }
 
 func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
-	log.Debugln("receive write request:", req.GetMessage().GetURIPath())
+	log.Debugln("receive write request:", req.Message().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -253,7 +255,7 @@ func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
 }
 
 func (m *MessagerClient) onServerExecute(req coap.Request) coap.Response {
-	log.Debugln("receive execute request:", req.GetMessage().GetURIPath())
+	log.Debugln("receive execute request:", req.Message().GetURIPath())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -266,30 +268,6 @@ func (m *MessagerClient) onServerExecute(req coap.Request) coap.Response {
 
 func (m *MessagerClient) onServerObserve() {
 	log.Println("Observe Request")
-}
-
-// NewPiggybackedResponse creates an ACK-piggybacked response.
-//
-//	Client              Server
-//	   |                  |
-//	   |   CON [0x7d34]   |
-//	   +----------------->|
-//	   |                  |
-//	   |   ACK [0x7d34]   |
-//	   |<-----------------+
-//	   |                  |
-func (m *MessagerClient) NewPiggybackedResponse(req coap.Request, code coap.Code, payload coap.Payload) coap.Response {
-	msg := coap.NewMessageOfType(coap.MessageAcknowledgment, req.GetMessage().Id)
-	msg.Token = req.GetMessage().Token
-	msg.Code = code
-
-	if payload != nil {
-		msg.Payload = payload
-	}
-
-	log.Debugln("new piggybacked response:", msg)
-
-	return coap.NewResponseWithMessage(msg)
 }
 
 func (m *MessagerClient) Send(req coap.Request) (coap.Response, error) {

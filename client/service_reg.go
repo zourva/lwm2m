@@ -10,19 +10,8 @@ import (
 	"github.com/zourva/pareto/box/meta"
 	"math"
 	"sort"
+	"sync/atomic"
 	"time"
-)
-
-type regState = int
-
-const (
-	rsUnknown regState = iota
-	rsRegistering
-	rsRegisterDone
-	rsUpdating
-	rsUpdateDone
-	rsUnregistering
-	rsUnregisterDone
 )
 
 const (
@@ -47,49 +36,50 @@ type regServerInfo struct {
 	retryCount     uint64
 	retrySequences uint64
 	registered     bool
+
+	//exponential uint64
 }
 
 // Communication Retry Timer * 2^(Current Attempt-1)
 func (r *regServerInfo) backoff() uint64 {
+	//r.exponential <<= r.retryCount - 1
+	//	return r.commRetryDelay * r.exponential
 	return r.commRetryDelay * uint64(math.Pow(2, float64(r.retryCount))-1)
 }
 
 func (r *regServerInfo) reset() {
 	r.retryCount = 0
 	r.retrySequences = 0
+	//r.exponential = 1
 }
 
 // Registrar implements application layer logic
 // for client registration procedure at server side.
 type Registrar struct {
-	machine *meta.StateMachine
-	client  *LwM2MClient
+	*meta.StateMachine[state]
 
-	//router interface providing
-	//uplink accessibility
+	client   *LwM2MClient
 	messager Messager
 
 	//uri location assigned
 	//when registration complete
 	location string
 
-	//state tracking
-	state regState
-
 	servers   []*regServerInfo
 	current   int
 	nextDelay uint64
+
+	fail atomic.Bool
 }
 
 func NewRegistrar(client *LwM2MClient) *Registrar {
 	s := &Registrar{
-		machine:   meta.NewStateMachine("registrar", time.Second),
-		client:    client,
-		messager:  client.messager,
-		location:  "",
-		state:     rsUnknown,
-		nextDelay: 0,
-		current:   0,
+		StateMachine: meta.NewStateMachine[state]("registrar", time.Second),
+		client:       client,
+		messager:     client.messager,
+		location:     "",
+		nextDelay:    0,
+		current:      0,
 	}
 
 	s.servers = []*regServerInfo{
@@ -106,27 +96,14 @@ func NewRegistrar(client *LwM2MClient) *Registrar {
 		},
 	}
 
-	s.machine.RegisterStates([]*meta.State{
-		{Name: initial, Action: s.onInitial},
+	s.RegisterStates([]*meta.State[state]{
+		{Name: initiating, Action: s.onInitiating},
 		{Name: registering, Action: s.onRegistering},
-		{Name: monitoring, Action: s.onMonitoring},
-		{Name: updating, Action: s.onUpdating},
-		{Name: unregistering, Action: s.onUnregistering},
+		{Name: registered, Action: s.onRegistered},
 		{Name: exiting, Action: s.onExiting},
 	})
 
-	s.machine.SetStartingState(initial)
-	s.machine.SetStoppingState(exiting)
-
 	return s
-}
-
-func (r *Registrar) getState() regState {
-	return r.state
-}
-
-func (r *Registrar) setState(s regState) {
-	r.state = s
 }
 
 func (r *Registrar) singleObjectInst(oid ObjectID) ObjectInstance {
@@ -139,11 +116,6 @@ func (r *Registrar) sortServers() {
 	sort.Slice(r.servers, func(i, j int) bool {
 		return r.servers[i].priorityOrder < r.servers[j].priorityOrder
 	})
-}
-
-func (r *Registrar) initiateBootstrap() {
-	r.machine.Pause()
-	r.client.requestBootstrap(bsRegRetryFailure)
 }
 
 func (r *Registrar) currentServer() *regServerInfo {
@@ -164,33 +136,52 @@ func (r *Registrar) addDelay(delaySec uint64) {
 }
 
 func (r *Registrar) registrationInfoChanged() bool {
+	// TODO: collect
 	return false
 }
 
-func (r *Registrar) onInitial(args any) {
+func (r *Registrar) buildObjectInstancesList() string {
+	var buf bytes.Buffer
+
+	all := r.client.store.GetInstanceManagers()
+	for oid, store := range all {
+		if store.Empty() {
+			buf.WriteString(fmt.Sprintf("</%d>,", oid))
+		} else {
+			for _, inst := range store.GetAll() {
+				buf.WriteString(fmt.Sprintf("</%d/%d>,", oid, inst.Id()))
+			}
+		}
+	}
+
+	return buf.String()
+}
+
+func (r *Registrar) Timeout() bool {
+	return r.fail.Load()
+}
+
+func (r *Registrar) onInitiating(_ any) {
 	r.sortServers()
 
 	// delay for "Initial Registration Delay Timer"
 	r.addDelay(r.currentServer().initRegDelay)
 
-	r.machine.MoveToState(registering)
+	r.MoveToState(registering)
 }
 
-func (r *Registrar) onRegistering(args any) {
+func (r *Registrar) onRegistering(_ any) {
 	server := r.currentServer()
 
 	r.addDelay(r.nextDelay)
 
-	if err := r.Register(); err != nil {
-		log.Errorf("register to %s failed: %v", server.address, err)
-		return
-	}
+	err := r.Register()
 
-	if r.registered() {
+	if err == nil {
 		log.Infof("register to %s done", server.address)
 
 		if !r.hasMoreServers() {
-			r.machine.MoveToState(monitoring)
+			r.MoveToState(registered)
 			return
 		}
 
@@ -199,6 +190,8 @@ func (r *Registrar) onRegistering(args any) {
 		log.Infof("proceed with next server: %s", server.address)
 		return
 	}
+
+	log.Errorf("register to %s failed: %v", server.address, err)
 
 	// register to current server failed
 	server.retryCount++
@@ -223,8 +216,8 @@ func (r *Registrar) onRegistering(args any) {
 
 			//server.reset()
 			// always initiate a new bootstrap when run out of retry sequences
-			r.initiateBootstrap()
-			log.Infoln("retry failed, a new bootstrap is requested")
+			r.fail.Store(true)
+			log.Infoln("retry failed, a new bootstrap needed")
 			return
 		}
 	} else {
@@ -237,40 +230,12 @@ func (r *Registrar) onRegistering(args any) {
 	}
 }
 
-func (r *Registrar) onMonitoring(args any) {
-	//TODO: collect changed registration info
-	if r.registrationInfoChanged() {
-		r.machine.MoveToState(updating)
-	}
-}
-func (r *Registrar) onUpdating(args any) {
-	if r.updated() {
-		r.machine.MoveToState(monitoring)
-		log.Infoln("registration info updated")
-	}
+func (r *Registrar) onRegistered(_ any) {
+	//wait for client to retrieve state and give further command
 }
 
-func (r *Registrar) onUnregistering(args any) {
-	if r.unregistered() {
-		r.machine.MoveToState(exiting)
-		log.Infoln("client unregistered")
-	}
-}
-
-func (r *Registrar) onExiting(args any) {
-	//clear thing
-}
-
-func (r *Registrar) registered() bool {
-	return r.getState() == rsRegisterDone
-}
-
-func (r *Registrar) unregistered() bool {
-	return r.getState() == rsUnregisterDone
-}
-
-func (r *Registrar) updated() bool {
-	return r.getState() == rsUpdateDone
+func (r *Registrar) onExiting(_ any) {
+	log.Infof("registrar exiting")
 }
 
 // Register encapsulates request payload containing objects
@@ -282,14 +247,12 @@ func (r *Registrar) updated() bool {
 //	   b/Q/sms/pid are optional.
 //	body: </1/0>,... which is optional.
 func (r *Registrar) Register() error {
-	r.setState(rsRegistering)
-
 	// send request
 	req := r.messager.NewConRequestPlainText(coap.Post, RegisterUri)
-	req.SetURIQuery("ep", r.client.name)
-	req.SetURIQuery("lt", defaultLifetime)
-	req.SetURIQuery("lwm2m", lwM2MVersion)
-	req.SetURIQuery("b", BindingModeUDP)
+	req.SetUriQuery("ep", r.client.name)
+	req.SetUriQuery("lt", defaultLifetime)
+	req.SetUriQuery("lwm2m", lwM2MVersion)
+	req.SetUriQuery("b", BindingModeUDP)
 	req.SetStringPayload(r.buildObjectInstancesList())
 	rsp, err := r.messager.Send(req)
 	if err != nil {
@@ -298,16 +261,16 @@ func (r *Registrar) Register() error {
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeCreated {
-		r.setState(rsRegisterDone)
-
+	if rsp.Message().Code == coap.CodeCreated {
 		// save location for update or de-register operation
-		r.location = rsp.GetMessage().GetLocationPath()
+		r.location = rsp.Message().GetLocationPath()
 		log.Infoln("register done with assigned location:", r.location)
 		return nil
 	}
 
-	return errors.New(rsp.GetMessage().GetCodeString())
+	log.Errorln("register request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(rsp.Message().GetCodeString())
 }
 
 // Deregister request with parameters like:
@@ -316,8 +279,6 @@ func (r *Registrar) Register() error {
 //	 uri: /{location}
 //		 where location has a format of /rd/{id}
 func (r *Registrar) Deregister() error {
-	r.setState(rsUnregistering)
-
 	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
 	req := r.messager.NewConRequestPlainText(coap.Delete, uri)
 	rsp, err := r.messager.Send(req)
@@ -327,13 +288,14 @@ func (r *Registrar) Deregister() error {
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeDeleted {
+	if rsp.Message().Code == coap.CodeDeleted {
 		log.Infoln("deregister done on", uri)
-		r.setState(rsUnregisterDone)
 		return nil
 	}
 
-	return errors.New(coap.CoapCodeToString(rsp.GetMessage().Code))
+	log.Errorln("de-register request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(coap.CodeString(rsp.Message().Code))
 }
 
 // Update requests with parameters like:
@@ -343,8 +305,6 @@ func (r *Registrar) Deregister() error {
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
 func (r *Registrar) Update(params ...any) error {
-	r.setState(rsUpdating)
-
 	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
 	req := r.messager.NewConRequestPlainText(coap.Post, uri)
 	req.SetStringPayload(r.buildObjectInstancesList())
@@ -355,41 +315,24 @@ func (r *Registrar) Update(params ...any) error {
 	}
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeChanged {
+	if rsp.Message().Code == coap.CodeChanged {
 		log.Infoln("update done on", uri)
-		r.setState(rsUpdateDone)
 		return nil
 	}
 
-	return nil
+	log.Errorln("update request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(coap.CodeString(rsp.Message().Code))
+}
+
+func (r *Registrar) Registered() bool {
+	return r.GetState() == registered
 }
 
 func (r *Registrar) Start() bool {
-	return r.machine.Startup()
+	return r.Startup()
 }
 
 func (r *Registrar) Stop() {
-	r.machine.Shutdown()
-}
-
-func (r *Registrar) buildObjectInstancesList() string {
-	var buf bytes.Buffer
-
-	all := r.client.store.GetInstanceManagers()
-	for oid, store := range all {
-		if store.Empty() {
-			buf.WriteString(fmt.Sprintf("</%d>,", oid))
-		} else {
-			for _, inst := range store.GetAll() {
-				buf.WriteString(fmt.Sprintf("</%d/%d>,", oid, inst.Id()))
-			}
-		}
-	}
-
-	return buf.String()
-}
-
-func (r *Registrar) timeout() bool {
-	// TODO
-	return false
+	r.Shutdown()
 }

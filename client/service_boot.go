@@ -12,31 +12,25 @@ import (
 type bootstrapReason = int32
 
 const (
-	bsInitialBootstrap bootstrapReason = iota
-	bsRegRetryFailure
-)
-
-type bootstrapState = int32
-
-const (
-	bsNone bootstrapState = iota
-	bsBootstrapping
-	bsBootstrapDone
+	bootstrapReasonStartup  bootstrapReason = iota
+	bootstrapReasonBootFail                 //bootstrap interface failure
+	bootstrapReasonRegFail                  //register interface failure
+	bootstrapReasonRptFail                  //report interface failure
+	bootstrapReasonDmtFail                  //device management interface failure
 )
 
 // Bootstrapper implements the
 // "Client Initiated Bootstrap" mode
 // defined in Bootstrap interface.
 type Bootstrapper struct {
-	client  *LwM2MClient
-	machine *meta.StateMachine
+	*meta.StateMachine[state]
 
+	client   *LwM2MClient
 	messager core.Messager
 
-	//state tracking
-	state bootstrapState
+	// TODO: get from bootstrap info
+	lastAttempt time.Time
 
-	lastAttempt       time.Time
 	bootSeverBootInfo *core.BootstrapServerBootstrapInfo
 	serverBootInfo    *core.ServerBootstrapInfo
 }
@@ -51,11 +45,11 @@ type Bootstrapper struct {
 //		   Endpoint Client Name does not match with CN field of X.509 Certificates
 //	 4.15 Unsupported content format The specified format is not supported
 func (r *Bootstrapper) Request() error {
-	r.setState(bsBootstrapping)
+	//r.setState(bsBootstrapping)
 
 	req := r.messager.NewConRequestPlainText(coap.Post, core.BoostrapUri)
-	req.SetURIQuery("ep", r.client.name)
-	//req.SetURIQuery("pct", fmt.Sprintf("%d", coap.MediaTypeOpaqueVndOmaLwm2m))
+	req.SetUriQuery("ep", r.client.name)
+	//req.SetUriQuery("pct", fmt.Sprintf("%d", coap.MediaTypeOpaqueVndOmaLwm2m))
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send bootstrap request failed:", err)
@@ -63,12 +57,12 @@ func (r *Bootstrapper) Request() error {
 	}
 
 	//check response code
-	if rsp.GetMessage().Code == coap.CodeChanged {
+	if rsp.Message().Code == coap.CodeChanged {
 		log.Infoln("bootstrap request accepted, progressing")
 		return nil
 	}
 
-	return errors.New(rsp.GetMessage().GetCodeString())
+	return errors.New(rsp.Message().GetCodeString())
 }
 
 // PackRequest implements BootstrapPackRequest operation
@@ -85,10 +79,8 @@ func (r *Bootstrapper) Request() error {
 //	 4.06 Not Acceptable The specified Content-Format is not supported
 //	 5.01 Not Implemented The operation is not implemented.
 func (r *Bootstrapper) PackRequest() error {
-	r.setState(bsBootstrapping)
-
 	req := r.messager.NewConRequestPlainText(coap.Get, core.BootstrapPackUri)
-	req.SetURIQuery("ep", r.client.name)
+	req.SetUriQuery("ep", r.client.name)
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("bootstrap pack request failed:", err)
@@ -96,13 +88,14 @@ func (r *Bootstrapper) PackRequest() error {
 	}
 
 	//check response code
-	if rsp.GetMessage().Code == coap.CodeContent {
-		r.setState(bsBootstrapDone)
-		log.Infof("bootstrap pack request done with %d bytes response", len(rsp.GetPayload()))
+	if rsp.Message().Code == coap.CodeContent {
+		log.Infof("bootstrap pack request done with %d bytes response", len(rsp.Payload()))
+
+		// TODO: save cookies from server
 		return nil
 	}
 
-	return errors.New(coap.CoapCodeToString(rsp.GetMessage().Code))
+	return errors.New(coap.CodeString(rsp.Message().Code))
 }
 
 func (r *Bootstrapper) OnRead() (*core.ResourceField, error) {
@@ -147,7 +140,7 @@ func (r *Bootstrapper) OnFinish() error {
 	//2.04 Changed Bootstrap-Finished is completed successfully
 	//4.00 Bad Request Bad URI provided
 	//4.06 Not Acceptable Inconsistent loaded configuration
-	r.setState(bsBootstrapDone)
+	//r.setState(bsBootstrapDone)
 
 	return core.ErrorNone
 }
@@ -170,67 +163,62 @@ var _ core.BootstrapClient = &Bootstrapper{}
 
 func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
 	s := &Bootstrapper{
-		client:   client,
-		machine:  meta.NewStateMachine("bootstrapper", time.Second),
-		messager: client.messager,
+		StateMachine: meta.NewStateMachine[state]("bootstrapper", time.Second),
+		client:       client,
+		messager:     client.messager,
 	}
 
-	s.machine.RegisterStates([]*meta.State{
-		{Name: initial, Action: s.onInitial},
+	s.RegisterStates([]*meta.State[state]{
+		{Name: initiating, Action: s.onInitiating},
 		{Name: bootstrapping, Action: s.onBootstrapping},
+		{Name: bootstrapped, Action: s.onBootstrapped},
 		{Name: exiting, Action: s.onExiting},
 	})
-
-	s.machine.SetStartingState(initial)
-	s.machine.SetStoppingState(exiting)
 
 	return s
 }
 
 func (r *Bootstrapper) Start() bool {
 	r.lastAttempt = time.Now()
-	return r.machine.Startup()
+	return r.Startup()
 }
 
 func (r *Bootstrapper) Stop() {
-	r.machine.Shutdown()
+	r.Shutdown()
 }
 
-func (r *Bootstrapper) getState() bootstrapState {
-	return r.state
+func (r *Bootstrapper) Bootstrapped() bool {
+	return r.GetState() == bootstrapped
 }
 
-func (r *Bootstrapper) setState(s bootstrapState) {
-	r.state = s
+func (r *Bootstrapper) Timeout() bool {
+	return time.Now().Sub(r.lastAttempt) > 60*time.Second
 }
 
-func (r *Bootstrapper) bootstrapped() bool {
-	return r.getState() == bsBootstrapDone
-}
-
-func (r *Bootstrapper) onInitial(_ any) {
+func (r *Bootstrapper) onInitiating(_ any) {
 	if err := r.PackRequest(); err != nil {
 		log.Errorf("bootstrap failed: %v", err)
 		return
 	}
 
-	log.Debugf("bootstrap requested")
+	log.Infof("bootstrap requested")
 
-	r.machine.MoveToState(bootstrapping)
+	r.MoveToState(bootstrapped)
 }
 
+// NOTE: not used for packed request.
 func (r *Bootstrapper) onBootstrapping(_ any) {
 	//wait for Bootstrap-Finish
-	if r.bootstrapped() {
-		log.Infof("bootstrap done")
-		return
-	}
+	//if r.Bootstrapped() {
+	//	log.Infof("bootstrap done")
+	//	return
+	//}
+}
+
+func (r *Bootstrapper) onBootstrapped(_ any) {
+	//wait for client to retrieve state and give further command
 }
 
 func (r *Bootstrapper) onExiting(_ any) {
 	log.Infof("bootstraper exiting")
-}
-
-func (r *Bootstrapper) timeout() bool {
-	return time.Now().Sub(r.lastAttempt) > 60*time.Second
 }

@@ -68,10 +68,10 @@ func New(name string, store ObjectInstanceStore, opts ...Option) *LwM2MClient {
 		name:    name,
 		store:   store,
 		options: &Options{},
-		machine: meta.NewStateMachine(name, time.Second),
+		machine: meta.NewStateMachine[state](name, time.Second),
 	}
 
-	c.bootstrapPending.Store(true)
+	c.initiateBootstrap(bootstrapReasonStartup)
 
 	for _, f := range opts {
 		f(c.options)
@@ -89,58 +89,64 @@ func New(name string, store ObjectInstanceStore, opts ...Option) *LwM2MClient {
 // functionalities and exposes API to
 // applications using callbacks.
 type LwM2MClient struct {
-	// name of endpoint, globally unique, assigned when provision
+	//endpoint assigned when provision
 	name    string
-	machine *meta.StateMachine
 	options *Options
+
+	machine *meta.StateMachine[state]
 
 	// store to save object instances
 	// loaded from local persistent storage.
 	store ObjectInstanceStore
 
 	coapConn coap.Server
-
-	// messager to communicate with server
-	messager *MessagerClient
+	messager *MessagerClient // messager to communicate with server
 
 	// lifecycle event manager
 	evtMgr *EventManager
 
 	// delegators
-	bootstrapper *Bootstrapper
-	registrar    *Registrar
+	bootstrapper *Bootstrapper // instance created for the latest try
+	registrar    *Registrar    // instance created for the latest try
 	controller   *DeviceController
-	reporter     *InfoReporter
+	reporter     *Reporter
 
-	bootstrapPending  atomic.Bool
-	regRestartCounter int
+	bootstrapPending atomic.Bool
+	registerPending  atomic.Bool
+	updatePending    atomic.Bool
 }
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
 	c.coapConn = coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0])
 	c.messager = NewMessager(c)
-	c.bootstrapper = NewBootstrapper(c)
-	c.registrar = NewRegistrar(c)
+	//c.bootstrapper = NewBootstrapper(c)
+	//c.registrar = NewRegistrar(c)
 	c.reporter = NewReporter(c)
-	c.machine.RegisterStates([]*meta.State{
-		{Name: initial, Action: c.onInitial},
+	c.machine.RegisterStates([]*meta.State[state]{
+		{Name: initiating, Action: c.onInitiating},
 		{Name: bootstrapping, Action: c.onBootstrapping},
 		{Name: registering, Action: c.onRegistering},
 		{Name: servicing, Action: c.onServicing},
 		{Name: exiting, Action: c.onExiting},
 	})
 
-	c.machine.SetStartingState(initial)
-	c.machine.SetStoppingState(exiting)
-
 	c.evtMgr = NewEventManager()
+	c.evtMgr.RegisterCreator(EventClientBeforeBootstrap, NewBootstrappedEvent)
 	c.evtMgr.RegisterCreator(EventClientBootstrapped, NewBootstrappedEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeRegister, NewBootstrappedEvent)
 	c.evtMgr.RegisterCreator(EventClientRegistered, NewRegisteredEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeUpdate, NewRegUpdatedEvent)
 	c.evtMgr.RegisterCreator(EventClientRegUpdated, NewRegUpdatedEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeUnregister, NewUnregisteredEvent)
 	c.evtMgr.RegisterCreator(EventClientUnregistered, NewUnregisteredEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeDevInfoChange, NewDeviceChangedEvent)
 	c.evtMgr.RegisterCreator(EventClientDevInfoChanged, NewDeviceChangedEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeObserve, NewInfoObservedEvent)
 	c.evtMgr.RegisterCreator(EventClientObserved, NewInfoObservedEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeObserveCancel, NewInfoObservedEvent)
+	c.evtMgr.RegisterCreator(EventClientObserveCancelled, NewInfoObservedEvent)
+	c.evtMgr.RegisterCreator(EventClientBeforeReport, NewInfoReportedEvent)
 	c.evtMgr.RegisterCreator(EventClientReported, NewInfoReportedEvent)
 	c.evtMgr.RegisterCreator(EventClientAbnormal, NewAbnormalEvent)
 
@@ -148,12 +154,6 @@ func (c *LwM2MClient) initialize() error {
 		log.Errorln("load object instances failed:", err)
 		return err
 	}
-
-	c.bootstrapper.SetBootstrapServerBootstrapInfo(
-		&BootstrapServerBootstrapInfo{
-			BootstrapServerAccount: c.getBootstrapServerAccount(),
-		},
-	)
 
 	return nil
 }
@@ -175,42 +175,43 @@ func (c *LwM2MClient) getBootstrapServerAccount() *BootstrapServerAccount {
 }
 
 func (c *LwM2MClient) doBootstrap() {
-	if c.bootstrapper.Start() {
-		log.Infoln("client is ready to bootstrap")
-		// clear pending state
-		c.clearBootstrapPending()
+	c.clearBootstrapPending()
 
-		// stop accept requests from servers
-		c.messager.PauseAcceptRequests()
+	log.Infoln("client is ready to bootstrap")
 
-		// trap into bootstrapper
-		c.machine.MoveToState(bootstrapping)
-	} else {
-		//try start again next iteration
-		log.Errorln("start bootstrapper failed, will try again")
-	}
+	c.messager.PauseUserPlane()
+
+	// always create a new bootstrapper
+	c.bootstrapper = NewBootstrapper(c)
+	c.bootstrapper.SetBootstrapServerBootstrapInfo(
+		&BootstrapServerBootstrapInfo{
+			BootstrapServerAccount: c.getBootstrapServerAccount(),
+		},
+	)
+	c.bootstrapper.Start()
+
+	c.machine.MoveToState(bootstrapping)
 }
 
 func (c *LwM2MClient) doRegister() {
-	if c.registrar.Start() {
-		log.Infoln("client is ready to register")
-		c.resetRegRestartCounter()
+	log.Infoln("client is ready to register")
 
-		// stop accept requests from servers
-		c.messager.PauseAcceptRequests()
+	//c.resetReportFailCounter()
+	c.messager.PauseUserPlane()
 
-		c.machine.MoveToState(registering)
-	} else {
-		//try start again next iteration
-	}
+	// always create a new bootstrapper
+	c.registrar = NewRegistrar(c)
+	c.registrar.Start()
+
+	c.machine.MoveToState(registering)
 }
 
 func (c *LwM2MClient) enableService() {
-	c.messager.ResumeAcceptRequests()
+	c.messager.ResumeUserPlane()
 	c.machine.MoveToState(servicing)
 }
 
-func (c *LwM2MClient) onInitial(_ any) {
+func (c *LwM2MClient) onInitiating(_ any) {
 	// determine bootstrap or registration procedure
 	if c.bootstrapRequired() {
 		c.doBootstrap()
@@ -220,42 +221,58 @@ func (c *LwM2MClient) onInitial(_ any) {
 }
 
 func (c *LwM2MClient) onBootstrapping(_ any) {
-	if c.bootstrapper.bootstrapped() {
-		log.Infoln("client is bootstrapped")
+	if c.bootstrapper.Bootstrapped() {
+		log.Infoln("client bootstrapped")
 		c.evtMgr.EmitEvent(EventClientBootstrapped)
 		c.bootstrapper.Stop()
 		c.doRegister()
 	} else {
 		//restart bootstrap if timeout
-		if c.bootstrapper.timeout() {
+		if c.bootstrapper.Timeout() {
 			c.bootstrapper.Stop()
-			c.machine.MoveToState(initial)
+			c.initiateBootstrap(bootstrapReasonBootFail)
 			log.Infof("client bootstrap timeout, retry")
 		}
 	}
 }
 
 func (c *LwM2MClient) onRegistering(_ any) {
-	if c.registrar.registered() {
-		log.Infoln("client is registered")
+	if c.registrar.Registered() {
+		log.Infoln("client registered")
 		c.evtMgr.EmitEvent(EventClientRegistered)
 		// registrar is long-running, so not stopped
 		c.enableService()
 	} else {
 		//restart registration if timeout
-		if c.registrar.timeout() {
+		if c.registrar.Timeout() {
 			c.registrar.Stop()
-			c.machine.MoveToState(initial)
-			log.Infof("client registration timeout, retry")
+			c.initiateBootstrap(bootstrapReasonRegFail)
+			log.Infof("client register timeout, retry bootstrapping")
 		}
 	}
 }
 
 func (c *LwM2MClient) onServicing(_ any) {
 	log.Traceln("client is servicing")
-	if c.regRestartCounter > 3 || c.bootstrapRequired() {
-		log.Infoln("client arranged for a new register or bootstrap")
-		c.machine.MoveToState(initial)
+
+	// check bootstrap first
+	if c.bootstrapRequired() {
+		log.Infoln("client arranged a new bootstrap")
+		c.machine.MoveToState(initiating)
+		return
+	}
+
+	// check registration
+	if c.registerRequired() {
+		log.Infoln("client arranged a new registration")
+		c.machine.MoveToState(initiating)
+		return
+	}
+
+	// checking health of components
+	if c.reporter.FailureCounter() > 3 {
+		c.initiateRegister()
+		return
 	}
 }
 
@@ -265,11 +282,9 @@ func (c *LwM2MClient) onExiting(_ any) {
 		return
 	}
 
-	if c.registrar.unregistered() {
-		log.Infoln("client is unregistered")
-		c.evtMgr.EmitEvent(EventClientUnregistered)
-		c.registrar.Stop()
-	}
+	log.Infoln("client is unregistered")
+	c.evtMgr.EmitEvent(EventClientUnregistered)
+	c.registrar.Stop()
 }
 
 func (c *LwM2MClient) makeDefaults() {
@@ -290,8 +305,25 @@ func (c *LwM2MClient) bootstrapRequired() bool {
 	return c.bootstrapPending.Load()
 }
 
-func (c *LwM2MClient) requestBootstrap(reason bootstrapReason) {
+func (c *LwM2MClient) registerRequired() bool {
+	return c.registerPending.Load()
+}
+
+func (c *LwM2MClient) updateRequired() bool {
+	return c.updatePending.Load()
+}
+
+func (c *LwM2MClient) initiateBootstrap(reason bootstrapReason) {
 	c.bootstrapPending.Store(true)
+	c.machine.MoveToState(initiating)
+	log.Infof("initiating a bootstrap with reason: %d", reason)
+}
+
+func (c *LwM2MClient) initiateRegister() {
+	// redundant clear
+	c.clearBootstrapPending()
+	c.registerPending.Store(true)
+	c.machine.MoveToState(initiating)
 }
 
 func (c *LwM2MClient) clearBootstrapPending() {
@@ -310,8 +342,12 @@ func (c *LwM2MClient) Stop() {
 	_ = c.store.StorageManager().Close()
 }
 
-func (c *LwM2MClient) Notify(data []byte) error {
-	return nil
+func (c *LwM2MClient) Servicing() bool {
+	return c.machine.GetState() == servicing
+}
+
+func (c *LwM2MClient) Notify(somebody string, something []byte) error {
+	return c.reporter.Notify(somebody, something)
 }
 
 func (c *LwM2MClient) Send(data []byte) ([]byte, error) {
@@ -336,12 +372,4 @@ func (c *LwM2MClient) EnableInstance(oid ObjectID, ids ...InstanceID) {
 
 func (c *LwM2MClient) EnableInstances(m InstanceIdsMap) {
 	c.store.EnableInstances(m)
-}
-
-func (c *LwM2MClient) incRegRestartCounter() {
-	c.regRestartCounter++
-}
-
-func (c *LwM2MClient) resetRegRestartCounter() {
-	c.regRestartCounter = 0
 }

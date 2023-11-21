@@ -6,47 +6,57 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	"github.com/zourva/lwm2m/core"
-	"github.com/zourva/pareto/box/meta"
+	"sync/atomic"
 	"time"
 )
 
-type InfoReporter struct {
-	*meta.StateMachine
+// Reporter implements information reporting
+// functionalities of the lwm2m protocol.
+// Unlike other interface implementations,
+// reporter has no standalone loop embedded.
+type Reporter struct {
 	client   *LwM2MClient
 	messager core.Messager
 
 	observer *Observer
+
+	// statistics
+	failure atomic.Int32
 }
 
-func NewReporter(c *LwM2MClient) *InfoReporter {
-	return &InfoReporter{
+func NewReporter(c *LwM2MClient) *Reporter {
+	r := &Reporter{
 		client:   c,
 		messager: c.messager,
 		observer: newObserver(),
 	}
+
+	r.failure.Store(0)
+
+	return r
 }
 
-func (r *InfoReporter) OnObserve(observationId string, attrs map[string]any) error {
+func (r *Reporter) OnObserve(observationId string, attrs map[string]any) error {
 	r.observer.add(observationId, attrs, nil)
 	return core.ErrorNone
 }
 
-func (r *InfoReporter) OnCancelObservation(observationId string) error {
+func (r *Reporter) OnCancelObservation(observationId string) error {
 	r.observer.delete(observationId)
 	return core.ErrorNone
 }
 
-func (r *InfoReporter) OnObserveComposite() error {
+func (r *Reporter) OnObserveComposite() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *InfoReporter) OnCancelObservationComposite() error {
+func (r *Reporter) OnCancelObservationComposite() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *InfoReporter) Notify(observationId string, value []byte) error {
+func (r *Reporter) Notify(observationId string, value []byte) error {
 	observation := r.observer.get(observationId)
 	if observation == nil {
 		log.Traceln("observation is not found for", observationId)
@@ -57,27 +67,39 @@ func (r *InfoReporter) Notify(observationId string, value []byte) error {
 	return r.messager.Notify(observationId, value)
 }
 
-func (r *InfoReporter) Send(value []byte) ([]byte, error) {
+func (r *Reporter) Send(value []byte) ([]byte, error) {
 	req := r.messager.NewConRequestOpaque(coap.Post, core.SendReportUri, value)
 	rsp, err := r.messager.Send(req)
 	if err != nil {
-		r.client.incRegRestartCounter()
+		r.incrementFailCounter()
 		log.Errorln("send opaque request failed: %v, ", err)
 		return nil, err
 	}
 
-	r.client.resetRegRestartCounter()
+	r.resetFailCounter()
 
 	// check response code
-	if rsp.GetMessage().Code == coap.CodeChanged {
+	if rsp.Message().Code == coap.CodeChanged {
 		log.Traceln("send opaque request done")
-		return rsp.GetPayload(), nil
+		return rsp.Payload(), nil
 	}
 
-	return nil, errors.New(coap.CoapCodeToString(rsp.GetMessage().Code))
+	return nil, errors.New(coap.CodeString(rsp.Message().Code))
 }
 
-var _ core.ReportingClient = &InfoReporter{}
+func (r *Reporter) FailureCounter() int32 {
+	return r.failure.Load()
+}
+
+func (r *Reporter) incrementFailCounter() {
+	r.failure.Add(1)
+}
+
+func (r *Reporter) resetFailCounter() {
+	r.failure.Store(0)
+}
+
+var _ core.ReportingClient = &Reporter{}
 
 type Observation struct {
 	oid   core.ObjectID
