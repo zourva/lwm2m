@@ -96,6 +96,9 @@ func (m *MessagerServer) Stop() {
 //	 uri:
 //		/bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
 func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
+	log.Debugf("receive Bootstrap-Request operation, size=%d bytes",
+		req.Message().Payload.Length())
+
 	ep := req.UriQuery("ep")
 	addr := req.Address().String()
 	err := m.bootstrapDelegator.OnRequest(ep, addr)
@@ -105,6 +108,8 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 		code = GetErrorCode(err)
 	}
 
+	log.Debugf("Bootstrap-Request operation processed")
+
 	return m.NewPiggybackedResponse(req, code, nil)
 }
 
@@ -113,6 +118,9 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 //	 uri:
 //		/bspack?ep={Endpoint Client Name}
 func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
+	log.Debugf("receive Bootstrap-Pack-Request operation, size=%d bytes",
+		req.Message().Payload.Length())
+
 	ep := req.UriQuery("ep")
 	rsp, err := m.bootstrapDelegator.OnPackRequest(ep)
 	code := coap.CodeContent
@@ -120,6 +128,8 @@ func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 		log.Errorf("error bootstrap pack client %s: %v", ep, err)
 		code = GetErrorCode(err)
 	}
+
+	log.Debugf("Bootstrap-Pack-Request operation processed")
 
 	return m.NewPiggybackedResponse(req, code, coap.NewBytesPayload(rsp))
 }
@@ -131,6 +141,9 @@ func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 //	   b/Q/sms/pid are optional.
 //	body: </1/0>,... which is optional.
 func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
+	log.Debugf("receive Register operation, size=%d bytes",
+		req.Message().Payload.Length())
+
 	ep := req.UriQuery("ep")
 	lt, _ := strconv.Atoi(req.UriQuery("lt"))
 	lwm2m := req.UriQuery("lwm2m")
@@ -159,6 +172,8 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 	rsp := m.NewPiggybackedResponse(req, code, coap.NewEmptyPayload())
 	rsp.Message().AddOption(coap.OptionLocationPath, "rd/"+clientId)
 
+	log.Debugf("Register operation processed")
+
 	return rsp
 }
 
@@ -168,6 +183,9 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
 func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
+	log.Debugf("receive Update operation, size=%d bytes",
+		req.Message().Payload.Length())
+
 	id := req.Attribute("id")
 	lt, _ := strconv.Atoi(req.UriQuery("lt"))
 	binding := req.UriQuery("b")
@@ -188,6 +206,8 @@ func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 		code = GetErrorCode(err)
 	}
 
+	log.Debugf("Update operation processed")
+
 	return m.NewPiggybackedResponse(req, code, coap.NewEmptyPayload())
 }
 
@@ -196,9 +216,13 @@ func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 //	uri: /{location}
 //	 where location has a format of /rd/{id}
 func (m *MessagerServer) onClientDeregister(req coap.Request) coap.Response {
-	id := req.Attribute("id")
+	log.Debugf("receive Deregister operation, size=%d bytes",
+		req.Message().Payload.Length())
 
+	id := req.Attribute("id")
 	m.registerService.OnDeregister(id)
+
+	log.Debugf("Deregister operation processed")
 
 	return m.NewPiggybackedResponse(req, coap.CodeDeleted, coap.NewEmptyPayload())
 }
@@ -211,6 +235,8 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	data := req.Message().Payload.GetBytes()
 	// check resource contained in reported list
 	// check server granted read access
+
+	log.Debugf("receive info via Send operation, size=%d bytes", len(data))
 
 	// get registered client bound to this info
 	c := m.registerManager.GetByAddr(req.Address().String())
@@ -226,6 +252,8 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 		log.Errorf("error recv client info: %v", err)
 		return m.NewPiggybackedResponse(req, coap.CodeInternalServerError, coap.NewEmptyPayload())
 	}
+
+	log.Debugln("process info via Send operation done")
 
 	return m.NewPiggybackedResponse(req, coap.CodeChanged, coap.NewBytesPayload(rsp))
 }

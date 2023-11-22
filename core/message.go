@@ -40,7 +40,7 @@ func (m *BaseMessager) NewPiggybackedResponse(req coap.Request, code coap.Code, 
 		msg.Payload = payload
 	}
 
-	log.Debugln("new piggybacked response:", msg)
+	log.Traceln("new piggybacked response:", msg)
 
 	return coap.NewResponseWithMessage(msg)
 }
