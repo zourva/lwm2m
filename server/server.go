@@ -66,7 +66,6 @@ func New(name string, opts ...Option) *LwM2MServer {
 	s.makeDefaults()
 	s.coapConn = coap.NewCoapServer(name, s.options.address)
 	s.registerManager = NewSessionManager(s)
-	s.messager = NewMessager(s)
 
 	s.evtMgr = NewEventManager()
 	s.evtMgr.RegisterCreator(EventServerStarted, NewServerStartedEvent)
@@ -111,6 +110,7 @@ func (s *LwM2MServer) EnableReportingService(reportService ReportingService) {
 }
 
 func (s *LwM2MServer) Serve() {
+	s.messager = NewMessager(s)
 	s.messager.Start()
 
 	s.evtMgr.EmitEvent(EventServerStarted)

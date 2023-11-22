@@ -35,7 +35,7 @@ func NewServer(name, local, remote string) Server {
 	if !strings.Contains(localHost, ":") {
 		localHost = ":" + localHost
 	}
-	localAddr, _ := net.ResolveUDPAddr("udp6", localHost)
+	localAddr, _ := net.ResolveUDPAddr("udp", localHost)
 
 	var remoteAddr *net.UDPAddr
 	if remote != "" {
@@ -43,7 +43,7 @@ func NewServer(name, local, remote string) Server {
 		if !strings.Contains(remoteHost, ":") {
 			remoteHost = ":" + remoteHost
 		}
-		remoteAddr, _ = net.ResolveUDPAddr("udp6", remoteHost)
+		remoteAddr, _ = net.ResolveUDPAddr("udp", remoteHost)
 	}
 
 	return &DefaultCoapServer{
@@ -457,7 +457,7 @@ func (s *DefaultCoapServer) Dial(host string) {
 }
 
 func (s *DefaultCoapServer) Dial6(host string) {
-	remoteAddr, _ := net.ResolveUDPAddr("udp6", host)
+	remoteAddr, _ := net.ResolveUDPAddr("udp", host)
 
 	s.remoteAddr = remoteAddr
 }

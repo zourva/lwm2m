@@ -127,7 +127,11 @@ func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *n
 				}
 			}
 
+			//log.Println("request received, size=", req.Message().Payload.Length())
+			//begin := box.TimeNowMs()
 			resp := route.Handler(req)
+			//log.Println("request processed, time=", box.TimeNowMs()-begin)
+
 			_, nilresponse := resp.(NilResponse)
 			if !nilresponse {
 				respMsg := resp.Message()
