@@ -5,54 +5,56 @@ import (
 	"github.com/zourva/lwm2m/core"
 )
 
-type ReportingService struct {
-	server *LwM2MServer
+type ReportingServerDelegator struct {
+	server  *LwM2MServer
+	service ReportingService
 }
 
-func (r *ReportingService) Observe(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID, attrs map[string]any) error {
+func (r *ReportingServerDelegator) Observe(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID, attrs map[string]any) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *ReportingService) CancelObservation(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID) error {
+func (r *ReportingServerDelegator) CancelObservation(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *ReportingService) ObserveComposite() error {
+func (r *ReportingServerDelegator) ObserveComposite() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *ReportingService) CancelObservationComposite() error {
+func (r *ReportingServerDelegator) CancelObservationComposite() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *ReportingService) OnNotify(c core.RegisteredClient, value []byte) error {
+func (r *ReportingServerDelegator) OnNotify(c core.RegisteredClient, value []byte) error {
 	log.Tracef("receive Notify operation data %d bytes", len(value))
 
-	if r.server.onNotified != nil {
-		_, err := r.server.onNotified(c, value)
+	if r.service.Notify != nil {
+		_, err := r.service.Notify(c, value)
 		return err
 	}
 
 	return nil
 }
 
-func (r *ReportingService) OnSend(c core.RegisteredClient, value []byte) ([]byte, error) {
+func (r *ReportingServerDelegator) OnSend(c core.RegisteredClient, value []byte) ([]byte, error) {
 	log.Tracef("receive Send operation data %d bytes", len(value))
 
-	if r.server.onSent != nil {
-		return r.server.onSent(c, value)
+	if r.service.Send != nil {
+		return r.service.Send(c, value)
 	}
 
 	return nil, nil
 }
 
-func NewInfoReportingService(server *LwM2MServer) core.ReportingServer {
-	s := &ReportingService{
-		server: server,
+func NewReportingServerDelegator(server *LwM2MServer, service ReportingService) core.ReportingServer {
+	s := &ReportingServerDelegator{
+		server:  server,
+		service: service,
 	}
 	return s
 }

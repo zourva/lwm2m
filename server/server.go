@@ -88,21 +88,26 @@ type LwM2MServer struct {
 
 	// session layer
 	coapConn coap.Server
-	messager *ServerMessager
+	messager *MessagerServer
 
 	evtMgr *EventManager
 
-	onSent         InfoReportHandler
-	onNotified     InfoReportHandler
-	onRegistered   ClientRegHandler
-	onRegUpdated   ClientRegHandler
-	onUnregistered ClientRegHandler
+	registerManager  RegisterManager
+	bootstrapService BootstrapService
+	registerService  RegistrationService
+	reportService    ReportingService
+}
 
-	onBootstrapInit ClientBootstrapHandler
-	onBootstrapping ClientBootstrapHandler
-	onBootstrapPack ClientBootstrapPackHandler
+func (s *LwM2MServer) EnableBootstrapService(bootstrapService BootstrapService) {
+	s.bootstrapService = bootstrapService
+}
 
-	registerManager RegisterManager
+func (s *LwM2MServer) EnableRegistrationService(registerService RegistrationService) {
+	s.registerService = registerService
+}
+
+func (s *LwM2MServer) EnableReportingService(reportService ReportingService) {
+	s.reportService = reportService
 }
 
 func (s *LwM2MServer) Serve() {
@@ -133,38 +138,6 @@ func (s *LwM2MServer) GetClient(name string) RegisteredClient {
 
 func (s *LwM2MServer) Listen(et EventType, h EventHandler) {
 	s.evtMgr.AddListener(et, h)
-}
-
-func (s *LwM2MServer) SetOnInfoSent(handler InfoReportHandler) {
-	s.onSent = handler
-}
-
-func (s *LwM2MServer) SetOnInfoNotified(handler InfoReportHandler) {
-	s.onNotified = handler
-}
-
-func (s *LwM2MServer) SetOnClientBootstrapInit(handler ClientBootstrapHandler) {
-	s.onBootstrapInit = handler
-}
-
-func (s *LwM2MServer) SetOnClientBootstrapping(handler ClientBootstrapHandler) {
-	s.onBootstrapping = handler
-}
-
-func (s *LwM2MServer) SetOnClientBootstrapPack(handler ClientBootstrapPackHandler) {
-	s.onBootstrapPack = handler
-}
-
-func (s *LwM2MServer) SetOnClientRegistered(handler ClientRegHandler) {
-	s.onRegistered = handler
-}
-
-func (s *LwM2MServer) SetOnClientRegUpdated(handler ClientRegHandler) {
-	s.onRegUpdated = handler
-}
-
-func (s *LwM2MServer) SetOnClientUnregistered(handler ClientRegHandler) {
-	s.onUnregistered = handler
 }
 
 func (s *LwM2MServer) makeDefaults() {

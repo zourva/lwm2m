@@ -76,17 +76,17 @@ type BootstrapContext interface {
 	Finish() error
 }
 
-// BootstrapService implements application layer logic
+// BootstrapServerDelegator delegates application layer logic
 // for client bootstrap procedure at server side.
-type BootstrapService struct {
+type BootstrapServerDelegator struct {
 	server *LwM2MServer
 	// TODO: lock protection?
 	clients map[string]BootstrapContext //name -> addr
+	service BootstrapService
 }
 
-func (b *BootstrapService) OnRequest(name, addr string) error {
-	if b.server.onBootstrapInit == nil ||
-		b.server.onBootstrapping == nil {
+func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
+	if b.service == nil {
 		return NotImplemented
 	}
 
@@ -104,13 +104,13 @@ func (b *BootstrapService) OnRequest(name, addr string) error {
 
 	b.save(ctx)
 
-	err := b.server.onBootstrapInit(ctx)
+	err := b.service.Bootstrap(ctx)
 	if err != nil {
 		return err
 	}
 
 	time.AfterFunc(500*time.Millisecond, func() {
-		err = b.server.onBootstrapping(ctx)
+		err = b.service.Bootstrapping(ctx)
 		if err != nil {
 			log.Errorln("bootstrap failed in procedure:", err)
 		}
@@ -121,8 +121,8 @@ func (b *BootstrapService) OnRequest(name, addr string) error {
 	return nil
 }
 
-func (b *BootstrapService) OnPackRequest(name string) ([]byte, error) {
-	if b.server.onBootstrapPack == nil {
+func (b *BootstrapServerDelegator) OnPackRequest(name string) ([]byte, error) {
+	if b.service == nil {
 		return nil, NotImplemented
 	}
 
@@ -132,7 +132,7 @@ func (b *BootstrapService) OnPackRequest(name string) ([]byte, error) {
 		create: time.Now(),
 	}
 
-	pack, err := b.server.onBootstrapPack(ctx)
+	pack, err := b.service.BootstrapPack(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -142,17 +142,18 @@ func (b *BootstrapService) OnPackRequest(name string) ([]byte, error) {
 	return pack, nil
 }
 
-func (b *BootstrapService) save(ctx BootstrapContext) {
+func (b *BootstrapServerDelegator) save(ctx BootstrapContext) {
 	b.clients[ctx.Name()] = ctx
 }
 
-func (b *BootstrapService) get(name string) BootstrapContext {
+func (b *BootstrapServerDelegator) get(name string) BootstrapContext {
 	return b.clients[name]
 }
 
-func NewBootstrapService(server *LwM2MServer) BootstrapServer {
-	s := &BootstrapService{
+func NewBootstrapServerDelegator(server *LwM2MServer, service BootstrapService) BootstrapServer {
+	s := &BootstrapServerDelegator{
 		server:  server,
+		service: service,
 		clients: make(map[string]BootstrapContext),
 	}
 
@@ -160,7 +161,7 @@ func NewBootstrapService(server *LwM2MServer) BootstrapServer {
 }
 
 type bootstrapContext struct {
-	owner  *BootstrapService
+	owner  *BootstrapServerDelegator
 	name   string
 	addr   string
 	create time.Time

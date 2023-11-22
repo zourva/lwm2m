@@ -2,7 +2,7 @@ package server
 
 import "github.com/zourva/lwm2m/core"
 
-// API defines methods for application layer to use.
+// Server defines api for application layer to use.
 //
 // Procedures, initiated by the client but not terminated
 // within the LwM2M protocol layer, will be exposed to
@@ -19,21 +19,27 @@ import "github.com/zourva/lwm2m/core"
 //
 // EventType listeners are also supported to acquire client states including
 // bootstrapping results, registration results etc.
-type API interface {
+type Server interface {
 	GetClient(name string) core.RegisteredClient
-
-	// OnEvent adds an event listener.
 	Listen(et core.EventType, h core.EventHandler)
+}
 
-	// SetOnInfoSent sets the callback to be invoked
-	// when info is received from Send operation of reporting interface.
-	SetOnInfoSent(handler InfoReportHandler)
+type BootstrapService interface {
+	Bootstrap(ctx BootstrapContext) error
+	Bootstrapping(ctx BootstrapContext) error
+	BootstrapPack(ctx BootstrapContext) ([]byte, error)
+}
 
-	// SetOnInfoNotified sets the callback to be invoked
-	// when info is received from Notify operation of reporting interface.
-	SetOnInfoNotified(handler InfoReportHandler)
+type RegistrationService interface {
+	Register(info *core.RegistrationInfo) ([]byte, error)
+	Update(info *core.RegistrationInfo) ([]byte, error)
+	Unregister(info *core.RegistrationInfo) ([]byte, error)
+}
 
-	SetOnClientRegistered(handler ClientRegHandler)
-	SetOnClientRegUpdated(handler ClientRegHandler)
-	SetOnClientUnregistered(handler ClientRegHandler)
+type ReportingService interface {
+	// Send invoked when info is received from send operation of reporting interface.
+	Send(c core.RegisteredClient, data []byte) ([]byte, error)
+
+	// Notify invoked when info is received from notify operation of reporting interface.
+	Notify(c core.RegisteredClient, data []byte) ([]byte, error)
 }

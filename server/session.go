@@ -27,7 +27,7 @@ type registeredClient struct {
 	// object instance ids when reported or updated
 	instances map[ObjectID]map[InstanceID]RegisteredObject
 
-	messager *ServerMessager
+	messager *MessagerServer
 }
 
 // NewClient creates a new session for a registered client

@@ -6,16 +6,18 @@ import (
 	"strings"
 )
 
-// RegistrationService implements application layer logic
+// RegisterServiceDelegator delegates application layer logic
 // for client registration procedure at server side.
-type RegistrationService struct {
+type RegisterServiceDelegator struct {
 	server    *LwM2MServer
 	clientMgr RegisterManager
+	service   RegistrationService
 }
 
-func NewRegistrationService(server *LwM2MServer) RegistrationServer {
-	s := &RegistrationService{
+func NewRegistrationServerDelegator(server *LwM2MServer, service RegistrationService) RegistrationServer {
+	s := &RegisterServiceDelegator{
 		server:    server,
+		service:   service,
 		clientMgr: server.registerManager,
 	}
 
@@ -24,13 +26,13 @@ func NewRegistrationService(server *LwM2MServer) RegistrationServer {
 
 // OnRegister registers a client and returns the assigned
 // location mapping to the unique endpoint client name.
-func (s *RegistrationService) OnRegister(info *RegistrationInfo) (string, error) {
+func (s *RegisterServiceDelegator) OnRegister(info *RegistrationInfo) (string, error) {
 	if err := s.validateRegInfo(info); err != nil {
 		return "", err
 	}
 
-	if s.server.onRegistered != nil {
-		if _, err := s.server.onRegistered(info); err != nil {
+	if s.service.Register != nil {
+		if _, err := s.service.Register(info); err != nil {
 			return "", err
 		}
 	}
@@ -47,15 +49,15 @@ func (s *RegistrationService) OnRegister(info *RegistrationInfo) (string, error)
 	return client.Location(), nil
 }
 
-func (s *RegistrationService) OnUpdate(info *RegistrationInfo) error {
+func (s *RegisterServiceDelegator) OnUpdate(info *RegistrationInfo) error {
 	return s.clientMgr.Update(info)
 }
 
-func (s *RegistrationService) OnDeregister(location string) {
+func (s *RegisterServiceDelegator) OnDeregister(location string) {
 	s.clientMgr.DeleteByLocation(location)
 }
 
-func (s *RegistrationService) validateRegInfo(info *RegistrationInfo) error {
+func (s *RegisterServiceDelegator) validateRegInfo(info *RegistrationInfo) error {
 	if len(info.Name) != 0 {
 		// TODO: unique check when necessary
 		// urn:uuid:########-####-####-####-############

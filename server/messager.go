@@ -11,31 +11,32 @@ import (
 	"time"
 )
 
-// ServerMessager encapsulates and hide
+// MessagerServer encapsulates and hide
 // transport layer details.
 //
 // Put them together here to make it
 // easier when replacing COAP layer later.
-type ServerMessager struct {
+type MessagerServer struct {
 	*BaseMessager
+
 	registerManager RegisterManager
 
-	// application layer
-	bootstrapService BootstrapServer
-	registerService  RegistrationServer
-	reportingService ReportingServer
+	// delegator layer
+	bootstrapDelegator BootstrapServer
+	registerService    RegistrationServer
+	reportingService   ReportingServer
 
 	// transport layer
 	network string
 	address string
-	router  *coap2.Router
-	server  *coap2.Server
+	//router  *coap2.Router
+	//server  *coap2.Server
 
 	coapConn coap.Server
 }
 
-func NewMessager(server *LwM2MServer) *ServerMessager {
-	m := &ServerMessager{
+func NewMessager(server *LwM2MServer) *MessagerServer {
+	m := &MessagerServer{
 		network: "udp",
 		address: server.options.address,
 	}
@@ -43,17 +44,17 @@ func NewMessager(server *LwM2MServer) *ServerMessager {
 	//m.router = coap2.NewRouter()
 	//m.server = coap2.NewServer(m.router)
 	m.coapConn = server.coapConn
-	m.registerManager = server.GetClientManager()
-	m.bootstrapService = NewBootstrapService(server)
-	m.registerService = NewRegistrationService(server)
-	m.reportingService = NewInfoReportingService(server)
+	m.registerManager = server.registerManager
+	m.bootstrapDelegator = NewBootstrapServerDelegator(server, server.bootstrapService)
+	m.registerService = NewRegistrationServerDelegator(server, server.registerService)
+	m.reportingService = NewReportingServerDelegator(server, server.reportService)
 
 	//m.deviceControlService = NewDeviceControlService(server)
 
 	return m
 }
 
-func (m *ServerMessager) Start() {
+func (m *MessagerServer) Start() {
 	// setup hooks
 	//m.router.Use(m.logInterceptor)
 
@@ -85,8 +86,8 @@ func (m *ServerMessager) Start() {
 	go m.coapConn.Start()
 }
 
-func (m *ServerMessager) Stop() {
-	m.server.Stop()
+func (m *MessagerServer) Stop() {
+	//m.server.Stop()
 	log.Infoln("lwm2m messager stopped")
 }
 
@@ -94,10 +95,10 @@ func (m *ServerMessager) Stop() {
 //
 //	 uri:
 //		/bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
-func (m *ServerMessager) onClientBootstrap(req coap.Request) coap.Response {
+func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 	ep := req.UriQuery("ep")
 	addr := req.Address().String()
-	err := m.bootstrapService.OnRequest(ep, addr)
+	err := m.bootstrapDelegator.OnRequest(ep, addr)
 	code := coap.CodeChanged
 	if err != nil {
 		log.Errorf("error bootstrap client %s: %v", ep, err)
@@ -111,9 +112,9 @@ func (m *ServerMessager) onClientBootstrap(req coap.Request) coap.Response {
 //
 //	 uri:
 //		/bspack?ep={Endpoint Client Name}
-func (m *ServerMessager) onClientBootstrapPack(req coap.Request) coap.Response {
+func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 	ep := req.UriQuery("ep")
-	rsp, err := m.bootstrapService.OnPackRequest(ep)
+	rsp, err := m.bootstrapDelegator.OnPackRequest(ep)
 	code := coap.CodeContent
 	if err != nil {
 		log.Errorf("error bootstrap pack client %s: %v", ep, err)
@@ -129,7 +130,7 @@ func (m *ServerMessager) onClientBootstrapPack(req coap.Request) coap.Response {
 //	        &lwm2m={version}&b={binding}&Q&sms={MSISDN}&pid={ProfileID}
 //	   b/Q/sms/pid are optional.
 //	body: </1/0>,... which is optional.
-func (m *ServerMessager) onClientRegister(req coap.Request) coap.Response {
+func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 	ep := req.UriQuery("ep")
 	lt, _ := strconv.Atoi(req.UriQuery("lt"))
 	lwm2m := req.UriQuery("lwm2m")
@@ -166,7 +167,7 @@ func (m *ServerMessager) onClientRegister(req coap.Request) coap.Response {
 //	uri: /{location}?lt={Lifetime}&b={binding}&Q&sms={MSISDN}
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
-func (m *ServerMessager) onClientUpdate(req coap.Request) coap.Response {
+func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 	id := req.Attribute("id")
 	lt, _ := strconv.Atoi(req.UriQuery("lt"))
 	binding := req.UriQuery("b")
@@ -194,7 +195,7 @@ func (m *ServerMessager) onClientUpdate(req coap.Request) coap.Response {
 //
 //	uri: /{location}
 //	 where location has a format of /rd/{id}
-func (m *ServerMessager) onClientDeregister(req coap.Request) coap.Response {
+func (m *MessagerServer) onClientDeregister(req coap.Request) coap.Response {
 	id := req.Attribute("id")
 
 	m.registerService.OnDeregister(id)
@@ -206,7 +207,7 @@ func (m *ServerMessager) onClientDeregister(req coap.Request) coap.Response {
 //
 //	uri: /dp
 //	body: implementation-specific.
-func (m *ServerMessager) onSendInfo(req coap.Request) coap.Response {
+func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	data := req.Message().Payload.GetBytes()
 	// check resource contained in reported list
 	// check server granted read access
@@ -229,7 +230,7 @@ func (m *ServerMessager) onSendInfo(req coap.Request) coap.Response {
 	return m.NewPiggybackedResponse(req, coap.CodeChanged, coap.NewBytesPayload(rsp))
 }
 
-func (m *ServerMessager) Read(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error) {
+func (m *MessagerServer) Read(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error) {
 	uri := m.makeAccessPath(oid, oiId, rid, riId)
 	req := m.NewConRequestPlainText(coap.Get, uri)
 	rsp, err := m.SendRequest(peer, req)
@@ -248,11 +249,11 @@ func (m *ServerMessager) Read(peer string, oid ObjectID, oiId InstanceID, rid Re
 	return nil, GetCodeError(rsp.Message().Code)
 }
 
-func (m *ServerMessager) Discover(peer string, oid ObjectID) ([]byte, error) {
+func (m *MessagerServer) Discover(peer string, oid ObjectID) ([]byte, error) {
 	panic("implement me")
 }
 
-func (m *ServerMessager) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
+func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
 	uri := m.makeAccessPath(oid, oiId, rid, NoneID)
 	req := m.NewConRequestPlainText(coap.Put, uri)
 	req.SetPayload(value.ToBytes())
@@ -271,7 +272,7 @@ func (m *ServerMessager) Write(peer string, oid ObjectID, oiId InstanceID, rid R
 	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *ServerMessager) Delete(peer string, oid ObjectID, oiId InstanceID) error {
+func (m *MessagerServer) Delete(peer string, oid ObjectID, oiId InstanceID) error {
 	uri := m.makeAccessPath(oid, oiId, NoneID, NoneID)
 	req := m.NewConRequestPlainText(coap.Put, uri)
 	rsp, err := m.SendRequest(peer, req)
@@ -289,7 +290,7 @@ func (m *ServerMessager) Delete(peer string, oid ObjectID, oiId InstanceID) erro
 	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *ServerMessager) Finish(peer string) error {
+func (m *MessagerServer) Finish(peer string) error {
 	req := m.NewConRequestPlainText(coap.Get, BootstrapFinishUri)
 	rsp, err := m.SendRequest(peer, req)
 	if err != nil {
@@ -306,7 +307,7 @@ func (m *ServerMessager) Finish(peer string) error {
 	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *ServerMessager) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {
+func (m *MessagerServer) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {
 	optionIds := []uint16{oiId, rid, riId}
 
 	uri := fmt.Sprintf("/%d", oid)
@@ -321,7 +322,7 @@ func (m *ServerMessager) makeAccessPath(oid ObjectID, oiId InstanceID, rid Resou
 	return uri
 }
 
-func (m *ServerMessager) SendRequest(peer string, req coap.Request) (coap.Response, error) {
+func (m *MessagerServer) SendRequest(peer string, req coap.Request) (coap.Response, error) {
 	clientAddr, _ := net.ResolveUDPAddr("udp", peer)
 
 	rsp, err := m.coapConn.SendTo(req, clientAddr)
@@ -333,20 +334,20 @@ func (m *ServerMessager) SendRequest(peer string, req coap.Request) (coap.Respon
 	return rsp, nil
 }
 
-func (m *ServerMessager) statsInterceptor(next coap2.Interceptor) coap2.Interceptor {
+func (m *MessagerServer) statsInterceptor(next coap2.Interceptor) coap2.Interceptor {
 	return coap2.Handler(func(w coap2.ResponseWriter, r *coap2.Message) {
 		//m.count++
 		next.ServeCOAP(w, r)
 	})
 }
 
-func (m *ServerMessager) logInterceptor(next coap2.Interceptor) coap2.Interceptor {
+func (m *MessagerServer) logInterceptor(next coap2.Interceptor) coap2.Interceptor {
 	return coap2.Handler(func(w coap2.ResponseWriter, r *coap2.Message) {
 		log.Debugf("recv msg from %v, content: %v", w.Conn().RemoteAddr(), r.String())
 		next.ServeCOAP(w, r)
 	})
 }
 
-func (m *ServerMessager) patternedRouteHandler(w coap2.ResponseWriter, r *coap2.Message) {
+func (m *MessagerServer) patternedRouteHandler(w coap2.ResponseWriter, r *coap2.Message) {
 
 }
