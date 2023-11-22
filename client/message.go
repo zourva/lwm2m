@@ -2,7 +2,6 @@ package client
 
 import (
 	log "github.com/sirupsen/logrus"
-
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"github.com/zourva/lwm2m/endec"

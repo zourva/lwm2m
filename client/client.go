@@ -1,6 +1,7 @@
 package client
 
 import (
+	piondtls "github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
@@ -18,6 +19,7 @@ type Options struct {
 	//storage       InstanceStorageManager
 	serverAddress []string
 	localAddress  string
+	dtlsConf      *piondtls.Config
 }
 
 type Option func(*Options)

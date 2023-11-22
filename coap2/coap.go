@@ -4,6 +4,8 @@ import (
 	piondtls "github.com/pion/dtls/v2"
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/dtls/server"
+	"github.com/plgd-dev/go-coap/v3/message"
+	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
 	"github.com/plgd-dev/go-coap/v3/net"
 	"github.com/plgd-dev/go-coap/v3/options"
@@ -11,13 +13,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Router = mux.Router
-
+type MediaType = message.MediaType
 type Message = mux.Message
 
 type Handler = mux.HandlerFunc
-
 type Interceptor = mux.Handler
+type Router = mux.Router
 
 type ResponseWriter = mux.ResponseWriter
 
@@ -46,6 +47,7 @@ type Response interface {
 }
 
 type PatternHandler = func(Request) Response
+type RouteHandler = PatternHandler
 
 //func ListenAndServe(s *Server, network, addr string) error {
 //	l, err := net.NewListenUDP(network, addr)
@@ -99,8 +101,11 @@ func NewClient(server string, dtlsConf *piondtls.Config) *Client {
 	return c
 }
 
+func (s *Client) Route(method codes.Code, pattern string, h PatternHandler) error {
+	return nil
+}
+
 type Server struct {
-	//*server.Server
 	*server.Server
 	router *Router
 }
