@@ -2,22 +2,22 @@ package server
 
 import . "github.com/zourva/lwm2m/core"
 
-type ServerStartedEvent struct {
+type StartedEvent struct {
 	*BaseEvent
 }
 
 func NewServerStartedEvent(args ...string) Event {
-	return &ServerStartedEvent{
+	return &StartedEvent{
 		BaseEvent: NewBaseEvent(EventServerStarted, "server started", "", args...),
 	}
 }
 
-type ServerStoppedEvent struct {
+type StoppedEvent struct {
 	*BaseEvent
 }
 
 func NewServerStoppedEvent(args ...string) Event {
-	return &ServerStoppedEvent{
+	return &StoppedEvent{
 		BaseEvent: NewBaseEvent(EventServerStopped, "server stopped", "", args...),
 	}
 }
