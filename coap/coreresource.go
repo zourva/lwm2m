@@ -1,6 +1,13 @@
 package coap
 
-// Instantiates a new core-attribute with a given key/value
+// CoreAttribute is a key/value pair
+// that describes the link or its target.
+type CoreAttribute struct {
+	Key   string
+	Value interface{}
+}
+
+// NewCoreAttribute creates a new core-attribute with a given key/value
 func NewCoreAttribute(key string, value interface{}) *CoreAttribute {
 	return &CoreAttribute{
 		Key:   key,
@@ -8,30 +15,30 @@ func NewCoreAttribute(key string, value interface{}) *CoreAttribute {
 	}
 }
 
-type CoreAttribute struct {
-	Key   string
-	Value interface{}
-}
+type CoreAttributes []*CoreAttribute
 
-// Instantiates a new Core Resource Object
+// NewCoreResource creates a new Core Resource Object
 func NewCoreResource() *CoreResource {
 	c := &CoreResource{}
-
 	return c
 }
 
-type CoreAttributes []*CoreAttribute
+// CoreResource contains a target URI, and optional target attributes.
+//
+//		e.g., </1/0>;ver=2.2;ct=40
+//	    Target is </1/0>
+//	    Attributes are ver=2.2 and ct=40 kv pairs.
 type CoreResource struct {
 	Target     string
 	Attributes CoreAttributes
 }
 
-// Adds an attribute (key/value) for a given core resource
+// AddAttribute adds an attribute (key/value) for a given core resource
 func (c *CoreResource) AddAttribute(key string, value interface{}) {
 	c.Attributes = append(c.Attributes, NewCoreAttribute(key, value))
 }
 
-// Gets an attribute for a core resource
+// GetAttribute gets an attribute for a core resource
 func (c *CoreResource) GetAttribute(key string) *CoreAttribute {
 	for _, attr := range c.Attributes {
 		if attr.Key == key {
