@@ -69,10 +69,24 @@ type regInfo struct {
 
 	//temporary id assigned by server
 	//when registration completed
-	location string
+	location     string
+	lifetimeLeft time.Duration
+}
 
-	lifetimeUpdate atomic.Bool
-	objectsChanged atomic.Bool
+func (r *regInfo) setLifetime(lifetime uint64) {
+	r.lifetime = lifetime
+	r.lifetimeLeft = time.Duration(lifetime) * time.Second
+
+}
+
+// return false to invoke renew lifetime.
+func (r *regInfo) decreaseLifetime(duration time.Duration) bool {
+	if r.lifetimeLeft < duration {
+		return false //renew lifetime
+	}
+
+	r.lifetimeLeft -= duration
+	return true
 }
 
 //func (r *regInfo) buildObjectInstances(oo map[ObjectID]*InstanceManager)  {
@@ -95,9 +109,8 @@ type Registrar struct {
 	fail atomic.Bool
 
 	// update
-	timer        *time.Timer
-	duration     time.Duration //update duration
-	lifetimeLeft time.Duration //lifetime
+	timer    *time.Timer
+	duration time.Duration //update duration
 }
 
 func NewRegistrar(client *LwM2MClient) *Registrar {
@@ -115,7 +128,7 @@ func NewRegistrar(client *LwM2MClient) *Registrar {
 	s.servers = client.getRegistrationServers()
 	s.regInfo = &regInfo{
 		name:     client.name,
-		lifetime: defaultLifetime,
+		lifetime: defaultLifetime, //delay init to lifetime of selected server
 		mode:     BindingModeUDP,
 		objects:  s.buildObjectInstancesList(),
 	}
@@ -177,15 +190,10 @@ func (r *Registrar) buildObjectInstancesList() string {
 }
 
 func (r *Registrar) enablePeriodicUpdate() {
-	r.lifetimeLeft = time.Duration(r.regInfo.lifetime) * time.Second
-	time.AfterFunc(r.duration, func() {
+	r.timer = time.AfterFunc(r.duration, func() {
 		var params []string
-		if r.lifetimeLeft < r.duration {
-			//re-rent lifetime
-			r.lifetimeLeft = time.Duration(r.regInfo.lifetime) * time.Second
+		if !r.regInfo.decreaseLifetime(r.duration) {
 			params = append(params, "lt")
-		} else {
-			r.lifetimeLeft -= r.duration
 		}
 
 		err := r.Update(params...)
@@ -193,6 +201,10 @@ func (r *Registrar) enablePeriodicUpdate() {
 			log.Errorf("registrar update failed %v, re-register", err)
 			r.client.initiateRegister()
 			return
+		}
+
+		if len(params) > 0 {
+			r.regInfo.setLifetime(r.regInfo.lifetime)
 		}
 
 		r.timer.Reset(r.duration)
@@ -291,7 +303,7 @@ func (r *Registrar) onExiting(_ any) {
 //	body: </1/0>,... which is optional.
 func (r *Registrar) Register() error {
 	// update reg info
-	r.regInfo.lifetime = r.currentServer().lifetime
+	r.regInfo.setLifetime(r.currentServer().lifetime)
 
 	// send request
 	req := r.messager.NewConRequestPlainText(coap.Post, RegisterUri)

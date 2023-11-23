@@ -243,6 +243,7 @@ func (c *LwM2MClient) onRegistering(_ any) {
 		log.Infoln("client registered")
 		c.evtMgr.EmitEvent(EventClientRegistered)
 		// registrar is long-running, so not stopped
+		c.registrar.Stop()
 		c.enableService()
 	} else {
 		//restart registration if timeout
