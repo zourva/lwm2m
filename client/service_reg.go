@@ -306,7 +306,7 @@ func (r *Registrar) Register() error {
 	r.regInfo.setLifetime(r.currentServer().lifetime)
 
 	// send request
-	req := r.messager.NewConRequestPlainText(coap.Post, RegisterUri)
+	req := r.messager.NewConRequestCoRELink(coap.Post, RegisterUri)
 	req.SetUriQuery("ep", r.regInfo.name)
 	req.SetUriQuery("lt", utils.IntToStr(r.regInfo.lifetime))
 	req.SetUriQuery("lwm2m", lwM2MVersion)
@@ -331,31 +331,6 @@ func (r *Registrar) Register() error {
 	return errors.New(rsp.Message().GetCodeString())
 }
 
-// Deregister request with parameters like:
-//
-//	 method: DELETE
-//	 uri: /{location}
-//		 where location has a format of /rd/{id}
-func (r *Registrar) Deregister() error {
-	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
-	req := r.messager.NewConRequestPlainText(coap.Delete, uri)
-	rsp, err := r.messager.Send(req)
-	if err != nil {
-		log.Errorln("send de-register request failed:", err)
-		return err
-	}
-
-	// check response code
-	if rsp.Message().Code == coap.CodeDeleted {
-		log.Infoln("deregister done on", uri)
-		return nil
-	}
-
-	log.Errorln("de-register request failed:", coap.CodeString(rsp.Message().Code))
-
-	return errors.New(coap.CodeString(rsp.Message().Code))
-}
-
 // Update requests with parameters like:
 //
 //	method: POST
@@ -364,7 +339,7 @@ func (r *Registrar) Deregister() error {
 //	body: </1/0>,... which is optional.
 func (r *Registrar) Update(params ...string) error {
 	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
-	req := r.messager.NewConRequestPlainText(coap.Post, uri)
+	req := r.messager.NewConRequestCoRELink(coap.Post, uri)
 
 	for _, param := range params {
 		if param == "lt" {
@@ -387,6 +362,31 @@ func (r *Registrar) Update(params ...string) error {
 	}
 
 	log.Errorln("update request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(coap.CodeString(rsp.Message().Code))
+}
+
+// Deregister request with parameters like:
+//
+//	 method: DELETE
+//	 uri: /{location}
+//		 where location has a format of /rd/{id}
+func (r *Registrar) Deregister() error {
+	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
+	req := r.messager.NewConRequestCoRELink(coap.Delete, uri)
+	rsp, err := r.messager.Send(req)
+	if err != nil {
+		log.Errorln("send de-register request failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeDeleted {
+		log.Infoln("deregister done on", uri)
+		return nil
+	}
+
+	log.Errorln("de-register request failed:", coap.CodeString(rsp.Message().Code))
 
 	return errors.New(coap.CodeString(rsp.Message().Code))
 }
