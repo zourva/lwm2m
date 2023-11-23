@@ -14,7 +14,7 @@ type RegistrationClient interface {
 	Deregister() error
 
 	// Update updates registration info of a client.
-	Update(params ...any) error
+	Update(params ...string) error
 }
 
 type RegistrationServer interface {
