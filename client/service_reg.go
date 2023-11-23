@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
+	"github.com/zourva/lwm2m/utils"
 	"github.com/zourva/pareto/box/meta"
 	"math"
 	"sort"
@@ -15,6 +16,7 @@ import (
 )
 
 const (
+	defaultLifetime          = 2592000   //30 days = 3600 * 24 * 30 seconds
 	defInitRegistrationDelay = 0         // Initial Registration Delay Timer, seconds
 	defCommRetryCount        = 5         // Communication Retry Count, attempts within a retry sequence
 	defCommRetryTimer        = 60        // Communication Retry Timer, seconds
@@ -22,7 +24,10 @@ const (
 	defCommSeqRetryCount     = 1         // Communication Sequence Retry Count
 )
 
+// regServerInfo defines tracking info
+// to each registration server.
 type regServerInfo struct {
+	lifetime          uint64
 	blocking          bool //pin current server
 	bootstrap         bool //initiate a new bootstrap when failure
 	address           string
@@ -33,10 +38,8 @@ type regServerInfo struct {
 	commSeqRetryDelay uint64
 	commSeqRetryLimit uint64
 
-	retryCount     uint64
-	retrySequences uint64
-	registered     bool
-
+	retryCount     uint64 //register count within a sequence
+	retrySequences uint64 //sequence count
 	//exponential uint64
 }
 
@@ -53,23 +56,48 @@ func (r *regServerInfo) reset() {
 	//r.exponential = 1
 }
 
+// regInfo maintains client side
+// registration info.
+type regInfo struct {
+	name     string
+	lifetime uint64 //MUST equal to Server.Lifetime resource
+	mode     BindingMode
+	objects  string
+	//objects  []*coap.CoreResource
+	//smsNumber
+	//profileID
+
+	//temporary id assigned by server
+	//when registration completed
+	location string
+
+	lifetimeUpdate atomic.Bool
+	objectsChanged atomic.Bool
+}
+
+//func (r *regInfo) buildObjectInstances(oo map[ObjectID]*InstanceManager)  {
+//
+//}
+
 // Registrar implements application layer logic
 // for client registration procedure at server side.
 type Registrar struct {
 	*meta.StateMachine[state]
+	client *LwM2MClient //lwm2m context
 
-	client   *LwM2MClient
 	messager Messager
 
-	//uri location assigned
-	//when registration complete
-	location string
-
+	regInfo   *regInfo
 	servers   []*regServerInfo
 	current   int
 	nextDelay uint64
 
 	fail atomic.Bool
+
+	// update
+	timer        *time.Timer
+	duration     time.Duration //update duration
+	lifetimeLeft time.Duration //lifetime
 }
 
 func NewRegistrar(client *LwM2MClient) *Registrar {
@@ -77,23 +105,19 @@ func NewRegistrar(client *LwM2MClient) *Registrar {
 		StateMachine: meta.NewStateMachine[state]("registrar", time.Second),
 		client:       client,
 		messager:     client.messager,
-		location:     "",
 		nextDelay:    0,
 		current:      0,
+		duration:     time.Second * 15,
 	}
 
-	s.servers = []*regServerInfo{
-		{
-			blocking:          true,
-			bootstrap:         true,
-			address:           "127.0.0.1:5683",
-			priorityOrder:     1,
-			initRegDelay:      defInitRegistrationDelay,
-			commRetryLimit:    defCommRetryCount,
-			commRetryDelay:    defCommRetryTimer,
-			commSeqRetryDelay: defCommSeqDelayTimer,
-			commSeqRetryLimit: defCommSeqRetryCount,
-		},
+	s.timer = time.NewTimer(s.duration)
+	s.timer.Stop() //stop to wait for rescheduling
+	s.servers = client.getRegistrationServers()
+	s.regInfo = &regInfo{
+		name:     client.name,
+		lifetime: defaultLifetime,
+		mode:     BindingModeUDP,
+		objects:  s.buildObjectInstancesList(),
 	}
 
 	s.RegisterStates([]*meta.State[state]{
@@ -135,11 +159,6 @@ func (r *Registrar) addDelay(delaySec uint64) {
 	time.Sleep(time.Duration(delaySec) * time.Second)
 }
 
-func (r *Registrar) registrationInfoChanged() bool {
-	// TODO: collect
-	return false
-}
-
 func (r *Registrar) buildObjectInstancesList() string {
 	var buf bytes.Buffer
 
@@ -155,6 +174,29 @@ func (r *Registrar) buildObjectInstancesList() string {
 	}
 
 	return buf.String()
+}
+
+func (r *Registrar) enablePeriodicUpdate() {
+	r.lifetimeLeft = time.Duration(r.regInfo.lifetime) * time.Second
+	time.AfterFunc(r.duration, func() {
+		var params []string
+		if r.lifetimeLeft < r.duration {
+			//re-rent lifetime
+			r.lifetimeLeft = time.Duration(r.regInfo.lifetime) * time.Second
+			params = append(params, "lt")
+		} else {
+			r.lifetimeLeft -= r.duration
+		}
+
+		err := r.Update(params...)
+		if err != nil {
+			log.Errorf("registrar update failed %v, re-register", err)
+			r.client.initiateRegister()
+			return
+		}
+
+		r.timer.Reset(r.duration)
+	})
 }
 
 func (r *Registrar) Timeout() bool {
@@ -182,6 +224,7 @@ func (r *Registrar) onRegistering(_ any) {
 
 		if !r.hasMoreServers() {
 			r.MoveToState(registered)
+			r.enablePeriodicUpdate()
 			return
 		}
 
@@ -247,13 +290,16 @@ func (r *Registrar) onExiting(_ any) {
 //	   b/Q/sms/pid are optional.
 //	body: </1/0>,... which is optional.
 func (r *Registrar) Register() error {
+	// update reg info
+	r.regInfo.lifetime = r.currentServer().lifetime
+
 	// send request
 	req := r.messager.NewConRequestPlainText(coap.Post, RegisterUri)
-	req.SetUriQuery("ep", r.client.name)
-	req.SetUriQuery("lt", defaultLifetime)
+	req.SetUriQuery("ep", r.regInfo.name)
+	req.SetUriQuery("lt", utils.IntToStr(r.regInfo.lifetime))
 	req.SetUriQuery("lwm2m", lwM2MVersion)
-	req.SetUriQuery("b", BindingModeUDP)
-	req.SetStringPayload(r.buildObjectInstancesList())
+	req.SetUriQuery("b", r.regInfo.mode)
+	req.SetStringPayload(r.regInfo.objects)
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send register request failed:", err)
@@ -263,8 +309,8 @@ func (r *Registrar) Register() error {
 	// check response code
 	if rsp.Message().Code == coap.CodeCreated {
 		// save location for update or de-register operation
-		r.location = rsp.Message().GetLocationPath()
-		log.Infoln("register done with assigned location:", r.location)
+		r.regInfo.location = rsp.Message().GetLocationPath()
+		log.Infoln("register done with assigned location:", r.regInfo.location)
 		return nil
 	}
 
@@ -279,7 +325,7 @@ func (r *Registrar) Register() error {
 //	 uri: /{location}
 //		 where location has a format of /rd/{id}
 func (r *Registrar) Deregister() error {
-	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
+	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
 	req := r.messager.NewConRequestPlainText(coap.Delete, uri)
 	rsp, err := r.messager.Send(req)
 	if err != nil {
@@ -304,10 +350,18 @@ func (r *Registrar) Deregister() error {
 //	uri: /{location}?lt={Lifetime}&b={binding}&Q&sms={MSISDN}
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
-func (r *Registrar) Update(params ...any) error {
-	uri := RegisterUri + fmt.Sprintf("/%s", r.location)
+func (r *Registrar) Update(params ...string) error {
+	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
 	req := r.messager.NewConRequestPlainText(coap.Post, uri)
-	req.SetStringPayload(r.buildObjectInstancesList())
+
+	for _, param := range params {
+		if param == "lt" {
+			req.SetUriQuery("lt", utils.IntToStr(r.regInfo.lifetime))
+		} else if param == "objlink" {
+			req.SetStringPayload(r.regInfo.objects)
+		}
+	}
+
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send update request failed:", err)
@@ -334,5 +388,6 @@ func (r *Registrar) Start() bool {
 }
 
 func (r *Registrar) Stop() {
+	r.timer.Stop()
 	r.Shutdown()
 }

@@ -332,6 +332,30 @@ func (c *LwM2MClient) clearBootstrapPending() {
 	c.bootstrapPending.Store(false)
 }
 
+func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
+	var list []*regServerInfo
+	servers := c.store.GetInstances(OmaObjectServer)
+	for _, server := range servers {
+		// TODO: retrieve from server
+		server.SingleField(LwM2MServerLifetime).Get()
+
+		list = append(list, &regServerInfo{
+			lifetime:          defaultLifetime,
+			blocking:          true,
+			bootstrap:         true,
+			address:           "127.0.0.1:5683",
+			priorityOrder:     1,
+			initRegDelay:      defInitRegistrationDelay,
+			commRetryLimit:    defCommRetryCount,
+			commRetryDelay:    defCommRetryTimer,
+			commSeqRetryDelay: defCommSeqDelayTimer,
+			commSeqRetryLimit: defCommSeqRetryCount,
+		})
+	}
+
+	return list
+}
+
 // Start runs the client's state-driven loop.
 func (c *LwM2MClient) Start() bool {
 	c.messager.Start()

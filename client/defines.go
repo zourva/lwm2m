@@ -4,7 +4,6 @@ const (
 	lwM2MVersion      = "1.1"
 	defaultServerAddr = "127.0.0.1:5683"
 	defaultLocalAddr  = ":0"
-	defaultLifetime   = "2592000" //30 days = 3600 * 24 * 30 seconds
 )
 
 // client state
