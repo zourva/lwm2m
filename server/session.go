@@ -64,9 +64,11 @@ func (c *registeredClient) Location() string {
 	return c.regInfo.Location
 }
 
+// Timeout returns true if a duration of lifetime
+// elapsed since last renewal update of lifetime.
 func (c *registeredClient) Timeout() bool {
-	// TODO: configurable session timeout
-	return time.Since(c.regInfo.UpdateTime) > 30*time.Minute
+	duration := c.regInfo.UpdateTime.Sub(c.regInfo.RegRenewTime)
+	return duration > time.Duration(c.regInfo.Lifetime)*time.Second
 }
 
 // Update updates parameters defined in

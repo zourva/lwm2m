@@ -23,8 +23,8 @@ type MessagerServer struct {
 
 	// delegator layer
 	bootstrapDelegator BootstrapServer
-	registerService    RegistrationServer
-	reportingService   ReportingServer
+	registerDelegator  RegistrationServer
+	reportDelegator    ReportingServer
 
 	// transport layer
 	network string
@@ -46,8 +46,8 @@ func NewMessager(server *LwM2MServer) *MessagerServer {
 	m.coapConn = server.coapConn
 	m.registerManager = server.registerManager
 	m.bootstrapDelegator = NewBootstrapServerDelegator(server, server.bootstrapService)
-	m.registerService = NewRegistrationServerDelegator(server, server.registerService)
-	m.reportingService = NewReportingServerDelegator(server, server.reportService)
+	m.registerDelegator = NewRegistrationServerDelegator(server, server.registerService)
+	m.reportDelegator = NewReportingServerDelegator(server, server.reportService)
 
 	//m.deviceControlService = NewDeviceControlService(server)
 
@@ -144,11 +144,20 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 	log.Debugf("receive Register operation, size=%d bytes",
 		req.Message().Payload.Length())
 
+	//The Media-Type of the registration message, if used,
+	//MUST be the CoRE Link Format (application/link-format)
+	if mts := req.Message().GetOptions(coap.OptionContentFormat); len(mts) > 0 {
+		if mts[0].IntValue() != int(coap.MediaTypeApplicationLinkFormat) {
+			return m.NewPiggybackedResponse(req, coap.CodeUnsupportedContentFormat, coap.NewEmptyPayload())
+		}
+	}
+
 	ep := req.UriQuery("ep")
 	lt, _ := strconv.Atoi(req.UriQuery("lt"))
 	lwm2m := req.UriQuery("lwm2m")
 	binding := req.UriQuery("b")
 
+	now := time.Now()
 	list := coap.CoreResourcesFromString(req.Message().Payload.String())
 	info := &RegistrationInfo{
 		Name:            ep,
@@ -158,11 +167,12 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 		BindingMode:     binding,
 		ObjectInstances: list,
 		Location:        "",
-		RegisterTime:    time.Now(),
-		UpdateTime:      time.Now(),
+		RegisterTime:    now,
+		RegRenewTime:    now,
+		UpdateTime:      now,
 	}
 
-	clientId, err := m.registerService.OnRegister(info)
+	clientId, err := m.registerDelegator.OnRegister(info)
 	code := coap.CodeCreated
 	if err != nil {
 		log.Errorf("error registering client %s: %v", ep, err)
@@ -179,27 +189,40 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 
 // handle request with parameters like:
 //
-//	uri: /{location}?lt={Lifetime}&b={binding}&Q&sms={MSISDN}
-//		where location has a format of /rd/{id} and b/Q/sms are optional.
+//	uri: /rd/{location}?lt={Lifetime}&b={binding}&Q&sms={MSISDN}
+//		where lt/b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
 func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 	log.Debugf("receive Update operation, size=%d bytes",
 		req.Message().Payload.Length())
 
-	id := req.Attribute("id")
-	lt, _ := strconv.Atoi(req.UriQuery("lt"))
-	binding := req.UriQuery("b")
-
-	list := coap.CoreResourcesFromString(req.Message().Payload.String())
-	info := &RegistrationInfo{
-		Location:        id,
-		Lifetime:        lt,
-		BindingMode:     binding,
-		ObjectInstances: list,
-		UpdateTime:      time.Now(),
+	if mts := req.Message().GetOptions(coap.OptionContentFormat); len(mts) > 0 {
+		if mts[0].IntValue() != int(coap.MediaTypeApplicationLinkFormat) {
+			return m.NewPiggybackedResponse(req, coap.CodeUnsupportedContentFormat, coap.NewEmptyPayload())
+		}
 	}
 
-	err := m.registerService.OnUpdate(info)
+	// get location from uri
+	loc := req.Attribute("id")
+	info := &RegistrationInfo{
+		Location:   loc,
+		UpdateTime: time.Now(),
+	}
+
+	//binding := req.UriQuery("b")
+	//info.BindingMode = binding
+	if len(req.UriQuery("lt")) > 0 {
+		lt, _ := strconv.Atoi(req.UriQuery("lt"))
+		info.Lifetime = lt
+		info.RegRenewTime = info.UpdateTime
+	}
+
+	list := coap.CoreResourcesFromString(req.Message().Payload.String())
+	if len(list) > 0 {
+		info.ObjectInstances = list
+	}
+
+	err := m.registerDelegator.OnUpdate(info)
 	code := coap.CodeChanged
 	if err != nil {
 		log.Errorf("error updating client %s: %v", info.Name, err)
@@ -213,14 +236,13 @@ func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 
 // handle request with parameters like:
 //
-//	uri: /{location}
-//	 where location has a format of /rd/{id}
+//	uri: /rd/{location}
 func (m *MessagerServer) onClientDeregister(req coap.Request) coap.Response {
 	log.Debugf("receive Deregister operation, size=%d bytes",
 		req.Message().Payload.Length())
 
 	id := req.Attribute("id")
-	m.registerService.OnDeregister(id)
+	m.registerDelegator.OnDeregister(id)
 
 	log.Debugf("Deregister operation processed")
 
@@ -247,7 +269,7 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	}
 
 	// commit to application layer
-	rsp, err := m.reportingService.OnSend(c, data)
+	rsp, err := m.reportDelegator.OnSend(c, data)
 	if err != nil {
 		log.Errorf("error recv client info: %v", err)
 		return m.NewPiggybackedResponse(req, coap.CodeInternalServerError, coap.NewEmptyPayload())
