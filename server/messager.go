@@ -18,13 +18,7 @@ import (
 // easier when replacing COAP layer later.
 type MessagerServer struct {
 	*BaseMessager
-
-	registerManager RegisterManager
-
-	// delegator layer
-	bootstrapDelegator BootstrapServer
-	registerDelegator  RegistrationServer
-	reportDelegator    ReportingServer
+	server *LwM2MServer //server context
 
 	// transport layer
 	network string
@@ -37,6 +31,7 @@ type MessagerServer struct {
 
 func NewMessager(server *LwM2MServer) *MessagerServer {
 	m := &MessagerServer{
+		server:  server,
 		network: "udp",
 		address: server.options.address,
 	}
@@ -44,12 +39,6 @@ func NewMessager(server *LwM2MServer) *MessagerServer {
 	//m.router = coap2.NewRouter()
 	//m.server = coap2.NewServer(m.router)
 	m.coapConn = server.coapConn
-	m.registerManager = server.registerManager
-	m.bootstrapDelegator = NewBootstrapServerDelegator(server, server.bootstrapService)
-	m.registerDelegator = NewRegistrationServerDelegator(server, server.registerService)
-	m.reportDelegator = NewReportingServerDelegator(server, server.reportService)
-
-	//m.deviceControlService = NewDeviceControlService(server)
 
 	return m
 }
@@ -101,7 +90,7 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 
 	ep := req.UriQuery("ep")
 	addr := req.Address().String()
-	err := m.bootstrapDelegator.OnRequest(ep, addr)
+	err := m.server.bootstrapDelegator.OnRequest(ep, addr)
 	code := coap.CodeChanged
 	if err != nil {
 		log.Errorf("error bootstrap client %s: %v", ep, err)
@@ -122,7 +111,7 @@ func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 		req.Message().Payload.Length())
 
 	ep := req.UriQuery("ep")
-	rsp, err := m.bootstrapDelegator.OnPackRequest(ep)
+	rsp, err := m.server.bootstrapDelegator.OnPackRequest(ep)
 	code := coap.CodeContent
 	if err != nil {
 		log.Errorf("error bootstrap pack client %s: %v", ep, err)
@@ -172,7 +161,7 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 		UpdateTime:      now,
 	}
 
-	clientId, err := m.registerDelegator.OnRegister(info)
+	clientId, err := m.server.registerDelegator.OnRegister(info)
 	code := coap.CodeCreated
 	if err != nil {
 		log.Errorf("error registering client %s: %v", ep, err)
@@ -183,6 +172,9 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 	rsp.Message().AddOption(coap.OptionLocationPath, "rd/"+clientId)
 
 	log.Debugf("Register operation processed")
+
+	//enable device management when registration succeeded
+	m.server.clientManager.Enable(clientId)
 
 	return rsp
 }
@@ -222,7 +214,7 @@ func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 		info.ObjectInstances = list
 	}
 
-	err := m.registerDelegator.OnUpdate(info)
+	err := m.server.registerDelegator.OnUpdate(info)
 	code := coap.CodeChanged
 	if err != nil {
 		log.Errorf("error updating client %s: %v", info.Name, err)
@@ -242,9 +234,11 @@ func (m *MessagerServer) onClientDeregister(req coap.Request) coap.Response {
 		req.Message().Payload.Length())
 
 	id := req.Attribute("id")
-	m.registerDelegator.OnDeregister(id)
+	m.server.registerDelegator.OnDeregister(id)
 
 	log.Debugf("Deregister operation processed")
+
+	m.server.clientManager.Disable(id)
 
 	return m.NewPiggybackedResponse(req, coap.CodeDeleted, coap.NewEmptyPayload())
 }
@@ -261,7 +255,7 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	log.Debugf("receive info via Send operation, size=%d bytes", len(data))
 
 	// get registered client bound to this info
-	c := m.registerManager.GetByAddr(req.Address().String())
+	c := m.server.clientManager.GetByAddr(req.Address().String())
 	if c == nil {
 		log.Errorf("not registered or address changed, " +
 			"a new registration is needed and the info sent is ignored")
@@ -269,7 +263,7 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	}
 
 	// commit to application layer
-	rsp, err := m.reportDelegator.OnSend(c, data)
+	rsp, err := m.server.reportDelegator.OnSend(c, data)
 	if err != nil {
 		log.Errorf("error recv client info: %v", err)
 		return m.NewPiggybackedResponse(req, coap.CodeInternalServerError, coap.NewEmptyPayload())
@@ -278,6 +272,22 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	log.Debugln("process info via Send operation done")
 
 	return m.NewPiggybackedResponse(req, coap.CodeChanged, coap.NewBytesPayload(rsp))
+}
+
+func (m *MessagerServer) BootstrapDiscover(peer string, oid ObjectID) ([]*coap.CoreResource, error) {
+	return m.Discover(Percent, oid, NoneID, NoneID, 1)
+}
+
+func (m *MessagerServer) BootstrapWrite(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
+	return m.Write(peer, oid, oiId, rid, NoneID, value)
+}
+
+func (m *MessagerServer) BootstrapDelete(peer string, oid ObjectID, oiId InstanceID) error {
+	return m.Delete(peer, oid, oiId, NoneID, NoneID)
+}
+
+func (m *MessagerServer) Create(peer string, oid ObjectID, value Value) error {
+	return nil
 }
 
 func (m *MessagerServer) Read(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error) {
@@ -292,19 +302,18 @@ func (m *MessagerServer) Read(peer string, oid ObjectID, oiId InstanceID, rid Re
 	// check response code
 	if rsp.Message().Code == coap.CodeContent {
 		log.Debugf("read operation against %s done", uri)
-
 		return rsp.Message().Payload.GetBytes(), nil
 	}
 
 	return nil, GetCodeError(rsp.Message().Code)
 }
 
-func (m *MessagerServer) Discover(peer string, oid ObjectID) ([]byte, error) {
+func (m *MessagerServer) Discover(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoreResource, error) {
 	panic("implement me")
 }
 
-func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
-	uri := m.makeAccessPath(oid, oiId, rid, NoneID)
+func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, value Value) error {
+	uri := m.makeAccessPath(oid, oiId, rid, riId)
 	req := m.NewConRequestPlainText(coap.Put, uri)
 	req.SetPayload(value.ToBytes())
 	rsp, err := m.SendRequest(peer, req)
@@ -322,8 +331,12 @@ func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid R
 	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *MessagerServer) Delete(peer string, oid ObjectID, oiId InstanceID) error {
-	uri := m.makeAccessPath(oid, oiId, NoneID, NoneID)
+func (m *MessagerServer) Execute(peer string, oid ObjectID, id InstanceID, rid ResourceID, args string) error {
+	return nil
+}
+
+func (m *MessagerServer) Delete(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error {
+	uri := m.makeAccessPath(oid, oiId, rid, riId)
 	req := m.NewConRequestPlainText(coap.Put, uri)
 	rsp, err := m.SendRequest(peer, req)
 	if err != nil {

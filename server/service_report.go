@@ -51,10 +51,10 @@ func (r *ReportingServerDelegator) OnSend(c core.RegisteredClient, value []byte)
 	return nil, nil
 }
 
-func NewReportingServerDelegator(server *LwM2MServer, service ReportingService) core.ReportingServer {
+func NewReportingServerDelegator(server *LwM2MServer) core.ReportingServer {
 	s := &ReportingServerDelegator{
 		server:  server,
-		service: service,
+		service: server.reportService,
 	}
 	return s
 }

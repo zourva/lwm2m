@@ -7,36 +7,32 @@ import (
 	"time"
 )
 
-type RegisterManager interface {
+// RegisteredClientManager manages sessions of clients,
+// based on RegisteredClient, that are registered to this server.
+type RegisteredClientManager interface {
 	Add(info *core.RegistrationInfo) core.RegisteredClient
-
 	Get(name string) core.RegisteredClient
 	GetByAddr(addr string) core.RegisteredClient
 	GetByLocation(location string) core.RegisteredClient
-
 	Update(info *core.RegistrationInfo) error
-
 	Delete(name string)
 	DeleteByLocation(location string)
+
+	Start()
+	Stop()
+
+	// Enable enables management of the registered
+	// client identified by location.
+	Enable(location string)
+
+	// Disable disables management of the registered
+	// client identified by location.
+	Disable(location string)
 }
 
-// sessionManager manages the
-// registration session of a client.
-type sessionManager struct {
-	sessions  map[string]core.RegisteredClient // index ep name -> session
-	indexAddr map[string]core.RegisteredClient // index addr -> session
-	indexLoc  map[string]core.RegisteredClient // index location -> session
-	store     RegInfoStore                     //registration info store
-	lock      sync.Mutex                       //TODO: optimize with lock-free
-
-	provider GuidProvider // session id generator
-	registry core.ObjectRegistry
-
-	quit chan bool
-}
-
-func NewSessionManager(server *LwM2MServer) RegisterManager {
+func NewRegisteredClientManager(server *LwM2MServer) RegisteredClientManager {
 	r := &sessionManager{
+		server:   server,
 		store:    server.options.store,
 		provider: server.options.provider,
 		registry: server.options.registry,
@@ -50,12 +46,50 @@ func NewSessionManager(server *LwM2MServer) RegisterManager {
 	return r
 }
 
+// sessionManager implements RegisteredClientManager.
+type sessionManager struct {
+	server *LwM2MServer // server context
+
+	sessions  map[string]core.RegisteredClient // index ep name -> session
+	indexAddr map[string]core.RegisteredClient // index addr -> session
+	indexLoc  map[string]core.RegisteredClient // index location -> session
+	store     RegInfoStore                     //registration info store
+	lock      sync.Mutex                       //TODO: optimize with lock-free
+
+	provider GuidProvider // session id generator
+	registry core.ObjectRegistry
+
+	quit chan bool
+}
+
 func (r *sessionManager) Start() {
 	go r.loop()
 }
 
 func (r *sessionManager) Stop() {
 	r.quit <- true
+}
+
+func (r *sessionManager) Enable(location string) {
+	client := r.GetByLocation(location)
+	if client == nil {
+		log.Warnf("enable client by location %s ignored due to not found", location)
+		return
+	}
+
+	client.Enable()
+	r.server.evtMgr.EmitEvent(core.EventClientRegistered, client)
+}
+
+func (r *sessionManager) Disable(location string) {
+	client := r.GetByLocation(location)
+	if client == nil {
+		log.Warnf("disable client by location %s ignored due to not found", location)
+		return
+	}
+
+	client.Disable()
+	r.server.evtMgr.EmitEvent(core.EventClientUnregistered, client)
 }
 
 // loop used to maintain session states.
@@ -128,7 +162,7 @@ func (r *sessionManager) Add(info *core.RegistrationInfo) core.RegisteredClient 
 	defer r.lock.Unlock()
 
 	info.Location = r.genLocation(info.Name)
-	session := NewClient(info, r.registry)
+	session := NewRegisteredClient(r.server, info, r.registry)
 
 	err := r.store.Save(session.RegistrationInfo())
 	if err != nil {

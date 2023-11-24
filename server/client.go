@@ -2,50 +2,55 @@ package server
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+// NewRegisteredClient creates a new session, using the given
+// registration information, representing the registered client.
+func NewRegisteredClient(server *LwM2MServer, info *RegistrationInfo, registry ObjectRegistry) RegisteredClient {
+	client := &registeredClient{
+		regInfo:   info,
+		registry:  registry,
+		server:    server,
+		instances: make(map[ObjectID]map[InstanceID]RegisteredObject),
+	}
+
+	client.createObjects(info.ObjectInstances)
+
+	return client
+}
 
 // registeredClient manages the lifecycle of a client
 // on server side from register to deregister.
 //
 // NOTE: not goroutine-safe.
 type registeredClient struct {
-	// registration info of a client.
-	regInfo *RegistrationInfo
-
-	// each client has its own enabled objects that are told
-	// to server when the client is registering or updating.
-	//objectStore ObjectInstanceStore
-
+	server   *LwM2MServer //server context
+	regInfo  *RegistrationInfo
 	registry ObjectRegistry
 
+	// TODO: no need to instantiate, just keep the CoRE-Link
 	// object instance ids when reported or updated
 	instances map[ObjectID]map[InstanceID]RegisteredObject
 
-	messager *MessagerServer
+	enabled atomic.Bool
 }
 
-// NewClient creates a new session for a registered client
-// using the given registration information.
-func NewClient(info *RegistrationInfo, registry ObjectRegistry) RegisteredClient {
-	session := &registeredClient{
-		regInfo:   info,
-		registry:  registry,
-		instances: make(map[ObjectID]map[InstanceID]RegisteredObject),
-	}
+func (c *registeredClient) Enabled() bool {
+	return c.enabled.Load()
+}
 
-	// predefined object classes
-	//reg := NewObjectRegistry(preset.NewOMAObjectClassInfoProvider())
-	//store := NewObjectInstanceStore(reg, nil)
-	//session.objectStore = store
-	session.createObjects(info.ObjectInstances)
+func (c *registeredClient) Enable() {
+	c.enabled.Store(true)
+}
 
-	return session
+func (c *registeredClient) Disable() {
+	c.enabled.Store(false)
 }
 
 func (c *registeredClient) RegistrationInfo() *RegistrationInfo {
@@ -95,44 +100,27 @@ func (c *registeredClient) GetObjectClass(t ObjectID) Object {
 }
 
 func (c *registeredClient) Create(oid ObjectID, newValue Value) error {
-	return nil
+	return c.server.messager.Create(c.Address(), oid, newValue)
 }
 
-func (c *registeredClient) Read(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error {
-	uri := c.makeAccessPath(oid, oiId, rid, riId)
-	mt := coap.MediaTypeTextPlainVndOmaLwm2m
-	if c.GetObjectClass(oid).Resource(rid).Multiple() {
-		mt = coap.MediaTypeTlvVndOmaLwm2m
-	}
-
-	req := c.messager.NewRequest(coap.MessageConfirmable, coap.Get, mt, uri)
-	rsp, err := c.messager.SendRequest(c.Address(), req)
-	if err != nil {
-		log.Errorln("read operation failed:", err)
-		return err
-	}
-
-	// TODO: parse response
-	//	responseValue, _ := utils.DecodeResourceValue()
-	log.Infoln("read operation done, rsp:", rsp)
-
-	return nil
+func (c *registeredClient) Read(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error) {
+	return c.server.messager.Read(c.Address(), oid, oiId, rid, riId)
 }
 
-func (c *registeredClient) Write(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error {
-	return nil
+func (c *registeredClient) Write(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) error {
+	return c.server.messager.Write(c.Address(), oid, oiId, rid, riId, newValue)
 }
 
-func (c *registeredClient) Delete(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error {
-	return nil
+func (c *registeredClient) Delete(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error {
+	return c.server.messager.Delete(c.Address(), oid, oiId, rid, riId)
 }
 
-func (c *registeredClient) Execute(oid ObjectID, instId InstanceID, resId ResourceID, args string) error {
-	return nil
+func (c *registeredClient) Execute(oid ObjectID, oiId InstanceID, rid ResourceID, args string) error {
+	return c.server.messager.Execute(c.Address(), oid, oiId, rid, args)
 }
 
-func (c *registeredClient) Discover(oid ObjectID, instId InstanceID, resId ResourceID, depth int) error {
-	return nil
+func (c *registeredClient) Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoreResource, error) {
+	return c.server.messager.Discover(c.Address(), oid, oiId, rid, depth)
 }
 
 func (c *registeredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {

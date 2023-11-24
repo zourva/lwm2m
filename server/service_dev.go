@@ -1,56 +1,44 @@
 package server
 
-import . "github.com/zourva/lwm2m/core"
+import (
+	"github.com/zourva/lwm2m/coap"
+	. "github.com/zourva/lwm2m/core"
+)
 
-type DeviceControlServer interface {
-	Create(client RegisteredClient, oid ObjectID, newValue Value) error
-	Read(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error
-	Write(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error
-	Delete(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error
-	Execute(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, args string) error
-	Discover(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, depth int) error
-	//ReadComposite()
-	//WriteComposite()
-	//WriteAttributes()
-}
-
-// DeviceControlService implements the server-side operations
+// DeviceControlDelegator implements the server-side operations
 // for Device Management and Service Enablement Interface.
-type DeviceControlService struct {
-	server *LwM2MServer
+type DeviceControlDelegator struct {
+	server  *LwM2MServer //server context
+	service DeviceControlService
 }
 
-func (d *DeviceControlService) Create(client RegisteredClient, oid ObjectID, newValue Value) error {
-	return client.Create(oid, newValue)
+func (d *DeviceControlDelegator) Create(oid ObjectID, newValue Value) error {
+	return nil
 }
 
-func (d *DeviceControlService) Read(client RegisteredClient, oid ObjectID,
-	instId InstanceID, resId ResourceID, resInstId InstanceID) error {
-	return client.Read(oid, instId, resId, resInstId)
+func (d *DeviceControlDelegator) Read(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error) {
+	return nil, nil
 }
 
-func (d *DeviceControlService) Write(client RegisteredClient, oid ObjectID,
-	instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error {
-	return client.Write(oid, instId, resId, resInstId, newValue)
+func (d *DeviceControlDelegator) Write(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error {
+	return nil
 }
 
-func (d *DeviceControlService) Delete(client RegisteredClient, oid ObjectID,
-	instId InstanceID, resId ResourceID, resInstId InstanceID) error {
-	return client.Delete(oid, instId, resId, resInstId)
+func (d *DeviceControlDelegator) Delete(oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error {
+	return nil
 }
 
-func (d *DeviceControlService) Execute(client RegisteredClient, oid ObjectID,
-	instId InstanceID, resId ResourceID, args string) error {
-	return client.Execute(oid, instId, resId, args)
+func (d *DeviceControlDelegator) Execute(oid ObjectID, instId InstanceID, resId ResourceID, args string) error {
+	return nil
 }
 
-func (d *DeviceControlService) Discover(client RegisteredClient, oid ObjectID,
-	instId InstanceID, resId ResourceID, depth int) error {
-	return client.Discover(oid, instId, resId, depth)
+func (d *DeviceControlDelegator) Discover(oid ObjectID, instId InstanceID, resId ResourceID, depth int) ([]*coap.CoreResource, error) {
+	return nil, nil
 }
 
-func NewDeviceControlService(server *LwM2MServer) DeviceControlServer {
-	return &DeviceControlService{
-		server: server,
+func NewDeviceControlServerDelegator(server *LwM2MServer) DeviceControlServer {
+	return &DeviceControlDelegator{
+		server:  server,
+		service: server.deviceDelegator,
 	}
 }

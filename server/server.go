@@ -10,49 +10,6 @@ const (
 	defaultAddress = ":5683"
 )
 
-type Options struct {
-	registry ObjectRegistry
-	provider GuidProvider //
-	store    RegInfoStore //registered client info store
-	stats    Statistics
-
-	address string //binding address
-
-	lcHandler LifecycleHandler
-}
-
-type Option func(*Options)
-
-func WithBindingAddress(addr string) Option {
-	return func(s *Options) {
-		s.address = addr
-	}
-}
-
-func WithLifecycleHandler(lh LifecycleHandler) Option {
-	return func(s *Options) {
-		s.lcHandler = lh
-	}
-}
-
-func WithGuidProvider(provider GuidProvider) Option {
-	return func(s *Options) {
-		s.provider = provider
-	}
-}
-
-func WithRegistrationInfoStore(store RegInfoStore) Option {
-	return func(s *Options) {
-		s.store = store
-	}
-}
-
-func WithObjectClassRegistry(registry ObjectRegistry) Option {
-	return func(s *Options) {
-		s.registry = registry
-	}
-}
-
 func New(name string, opts ...Option) *LwM2MServer {
 	s := &LwM2MServer{
 		name:    name,
@@ -65,7 +22,11 @@ func New(name string, opts ...Option) *LwM2MServer {
 
 	s.makeDefaults()
 	s.coapConn = coap.NewCoapServer(name, s.options.address)
-	s.registerManager = NewSessionManager(s)
+	s.clientManager = NewRegisteredClientManager(s)
+	s.bootstrapDelegator = NewBootstrapServerDelegator(s)
+	s.registerDelegator = NewRegistrationServerDelegator(s)
+	s.reportDelegator = NewReportingServerDelegator(s)
+	s.deviceDelegator = NewDeviceControlServerDelegator(s)
 
 	s.evtMgr = NewEventManager()
 	s.evtMgr.RegisterCreator(EventServerStarted, NewServerStartedEvent)
@@ -75,11 +36,6 @@ func New(name string, opts ...Option) *LwM2MServer {
 
 	return s
 }
-
-type ClientBootstrapHandler = func(ctx BootstrapContext) error
-type ClientBootstrapPackHandler = func(BootstrapContext) ([]byte, error)
-type ClientRegHandler = func(info *RegistrationInfo) ([]byte, error)
-type InfoReportHandler = func(c RegisteredClient, data []byte) ([]byte, error)
 
 type LwM2MServer struct {
 	name    string
@@ -91,10 +47,19 @@ type LwM2MServer struct {
 
 	evtMgr *EventManager
 
-	registerManager  RegisterManager
+	clientManager RegisteredClientManager
+
+	// delegator layer
+	bootstrapDelegator BootstrapServer
+	registerDelegator  RegistrationServer
+	reportDelegator    ReportingServer
+	deviceDelegator    DeviceControlServer
+
+	// service layer
 	bootstrapService BootstrapService
 	registerService  RegistrationService
 	reportService    ReportingService
+	controlService   DeviceControlService
 }
 
 func (s *LwM2MServer) EnableBootstrapService(bootstrapService BootstrapService) {
@@ -109,31 +74,28 @@ func (s *LwM2MServer) EnableReportingService(reportService ReportingService) {
 	s.reportService = reportService
 }
 
+func (s *LwM2MServer) EnableDeviceControlService(controlService DeviceControlService) {
+	s.controlService = controlService
+}
+
 func (s *LwM2MServer) Serve() {
 	s.messager = NewMessager(s)
 	s.messager.Start()
-
+	s.clientManager.Start()
 	s.evtMgr.EmitEvent(EventServerStarted)
-
 	log.Infoln("lwm2m server started")
 }
 
 // Shutdown shuts down the server gracefully.
 func (s *LwM2MServer) Shutdown() {
+	s.clientManager.Stop()
 	s.messager.Stop()
-	//s.ClearSessions()
-
 	s.evtMgr.EmitEvent(EventServerStopped)
-
 	log.Infoln("lwm2m server stopped")
 }
 
-func (s *LwM2MServer) GetClientManager() RegisterManager {
-	return s.registerManager
-}
-
 func (s *LwM2MServer) GetClient(name string) RegisteredClient {
-	return s.registerManager.Get(name)
+	return s.clientManager.Get(name)
 }
 
 func (s *LwM2MServer) Listen(et EventType, h EventHandler) {
@@ -153,9 +115,9 @@ func (s *LwM2MServer) makeDefaults() {
 		s.options.store = NewInMemorySessionStore()
 	}
 
-	if s.options.stats == nil {
-		s.options.stats = &DefaultStatistics{}
-	}
+	//if s.options.stats == nil {
+	//	s.options.stats = &DefaultStatistics{}
+	//}
 
 	if s.options.lcHandler == nil {
 		s.options.lcHandler = NewDefaultLifecycleHandler()

@@ -24,6 +24,7 @@ type RegistrationServer interface {
 }
 
 type RegisteredClient interface {
+	DeviceControlServer
 	Name() string
 	Address() string
 	Location() string
@@ -31,7 +32,10 @@ type RegisteredClient interface {
 	Update(info *RegistrationInfo)
 	GetObjectClass(t ObjectID) Object
 	RegistrationInfo() *RegistrationInfo
-	DeviceControlProxy
+
+	Enable()
+	Disable()
+	Enabled() bool
 }
 
 // RegistrationInfo defines registered client
@@ -53,7 +57,7 @@ type RegistrationInfo struct {
 	BindingMode BindingMode `msgpack:"bindingMode"`
 
 	// mandatory objects and instances, excluding
-	// object 0, 21, and 23
+	// object 0, 21, and 23, CoRE-Link format.
 	ObjectInstances []*coap.CoreResource `msgpack:"objectInstances"`
 
 	Location       string    `msgpack:"location"`       //temporary id

@@ -11,11 +11,11 @@ const (
 	EventClientBeforeBootstrap               // issued before client starts bootstrapping
 	EventClientBootstrapped                  // issued when client is bootstrapped
 	EventClientBeforeRegister                //
-	EventClientRegistered                    // issued when client is registered
+	EventClientRegistered                    // issued when client is registered on both side
 	EventClientBeforeUpdate                  //
 	EventClientRegUpdated                    // issued when client registration info is updated
 	EventClientBeforeUnregister              //
-	EventClientUnregistered                  // issued when client is unregistered
+	EventClientUnregistered                  // issued when client is unregistered on both side
 	EventClientBeforeDevInfoChange           //
 	EventClientDevInfoChanged                // issued when any resource of client is operated
 	EventClientBeforeObserve                 //
@@ -113,9 +113,9 @@ func (em *EventManager) AddListener(et EventType, h EventHandler) {
 }
 
 // EmitEvent triggers the callback registered on evt.
-func (em *EventManager) EmitEvent(evt EventType) {
+func (em *EventManager) EmitEvent(evt EventType, args ...any) {
 	if handler, ok := em.listeners[evt]; ok {
-		handler(em.createEvent(evt))
+		handler(em.createEvent(evt, args...))
 	}
 }
 
@@ -123,7 +123,7 @@ func (em *EventManager) RegisterCreator(evt EventType, gen EventGenerator) {
 	em.creators[evt] = gen
 }
 
-func (em *EventManager) createEvent(evt EventType) Event {
+func (em *EventManager) createEvent(evt EventType, args ...any) Event {
 	if creator, ok := em.creators[evt]; ok {
 		return creator()
 	}
