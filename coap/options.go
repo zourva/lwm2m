@@ -55,7 +55,7 @@ func (o *CoapOption) StringValue() string {
 }
 
 func (o *CoapOption) IntValue() int {
-	return o.Value.(int)
+	return int(o.Value.(uint32))
 }
 
 // Instantiates a New Option

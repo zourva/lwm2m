@@ -5,6 +5,7 @@ import (
 	"net"
 )
 
+// handleRequest handles messages from LwM2M peer(either server or client).
 func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	if msg.Type != MessageReset {
 		// Unsupported Method
@@ -235,17 +236,26 @@ func handleRequestAutoAcknowledge(s Server, msg *Message, conn *net.UDPConn, add
 }
 
 func handleReqObserve(s Server, req Request, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
+	//enable := msg.GetOption(OptionObserve).IntValue() == 0
 	// TODO: if server doesn't allow observing, return error
 
 	// TODO: Check if observation has been registered, if yes, remove it (observation == cancel)
 	resource := msg.GetURIPath()
 	if s.HasObservation(resource, addr) {
+		//if enable {
+		//	return //already enabled ignored
+		//}
+
 		// Remove observation of client
 		s.RemoveObservation(resource, addr)
 
 		// Observe Cancel Request & Fire OnObserveCancel Event
 		s.GetEvents().ObserveCancelled(resource, msg)
 	} else {
+		//if !enable {
+		//	return //not enabled yet, ignore
+		//}
+
 		// AddProvider observation of client
 		s.AddObservation(msg.GetURIPath(), string(msg.Token), addr)
 
