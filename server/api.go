@@ -54,12 +54,12 @@ type DeviceControlService interface {
 // Options defines options application can
 // provide when creating a LwM2M server.
 type Options struct {
-	registry  core.ObjectRegistry
-	provider  GuidProvider //
-	store     RegInfoStore //registered client info store
-	address   string       //binding address
-	stats     Statistics
-	lcHandler LifecycleHandler
+	registry core.ObjectRegistry
+	provider GuidProvider //
+	store    RegInfoStore //registered client info store
+	address  string       //binding address
+	stats    Statistics
+	observer ClientEventObserver
 }
 
 type Option func(*Options)
@@ -70,9 +70,9 @@ func WithBindingAddress(addr string) Option {
 	}
 }
 
-func WithLifecycleHandler(lh LifecycleHandler) Option {
+func WithClientEventObserver(observer ClientEventObserver) Option {
 	return func(s *Options) {
-		s.lcHandler = lh
+		s.observer = observer
 	}
 }
 

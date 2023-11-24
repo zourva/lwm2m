@@ -123,6 +123,22 @@ func (c *registeredClient) Discover(oid ObjectID, oiId InstanceID, rid ResourceI
 	return c.server.messager.Discover(c.Address(), oid, oiId, rid, depth)
 }
 
+func (c *registeredClient) Observe(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, attrs map[string]any, h ObserveHandler) error {
+	return c.server.messager.Observe(c.Address(), oid, oiId, rid, riId, attrs, h)
+}
+
+func (c *registeredClient) CancelObservation(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error {
+	return c.server.messager.CancelObservation(c.Address(), oid, oiId, rid, riId)
+}
+
+func (c *registeredClient) ObserveComposite(contentType coap.MediaType, reqBody []byte, h ObserveHandler) error {
+	return c.server.messager.ObserveComposite(c.Address(), contentType, reqBody, h)
+}
+
+func (c *registeredClient) CancelObservationComposite(contentType coap.MediaType, reqBody []byte) error {
+	return c.server.messager.CancelObservationComposite(c.Address(), contentType, reqBody)
+}
+
 func (c *registeredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) string {
 	optionIds := []uint16{oiId, rid, riId}
 
