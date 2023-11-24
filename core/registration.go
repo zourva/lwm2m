@@ -25,6 +25,7 @@ type RegistrationServer interface {
 
 type RegisteredClient interface {
 	DeviceControlServer
+	ReportingServer
 	Name() string
 	Address() string
 	Location() string

@@ -52,8 +52,8 @@ type LwM2MServer struct {
 	// delegator layer
 	bootstrapDelegator BootstrapServer
 	registerDelegator  RegistrationServer
-	reportDelegator    ReportingServer
-	deviceDelegator    DeviceControlServer
+	reportDelegator    *ReportingServerDelegator
+	deviceDelegator    *DeviceControlDelegator
 
 	// service layer
 	bootstrapService BootstrapService
@@ -119,8 +119,8 @@ func (s *LwM2MServer) makeDefaults() {
 	//	s.options.stats = &DefaultStatistics{}
 	//}
 
-	if s.options.lcHandler == nil {
-		s.options.lcHandler = NewDefaultLifecycleHandler()
+	if s.options.observer == nil {
+		s.options.observer = NewDefaultEventObserver()
 	}
 
 	if s.options.provider == nil {

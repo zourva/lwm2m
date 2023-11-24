@@ -286,6 +286,39 @@ func (m *MessagerServer) BootstrapDelete(peer string, oid ObjectID, oiId Instanc
 	return m.Delete(peer, oid, oiId, NoneID, NoneID)
 }
 
+func (m *MessagerServer) BootstrapFinish(peer string) error {
+	req := m.NewConRequestPlainText(coap.Get, BootstrapFinishUri)
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("bootstrap finish operation failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeChanged {
+		log.Debugf("bootstrap finish operation done")
+		return nil
+	}
+
+	return GetCodeError(rsp.Message().Code)
+}
+
+func (m *MessagerServer) Observe(peer string, oid ObjectID, id InstanceID, rid ResourceID, id2 InstanceID, attrs map[string]any, h ObserveHandler) error {
+	return nil
+}
+
+func (m *MessagerServer) CancelObservation(address string, oid ObjectID, id InstanceID, rid ResourceID, id2 InstanceID) error {
+	return nil
+}
+
+func (m *MessagerServer) ObserveComposite(address string, contentType coap.MediaType, body []byte, h ObserveHandler) error {
+	return nil
+}
+
+func (m *MessagerServer) CancelObservationComposite(address string, contentType coap.MediaType, body []byte) error {
+	return nil
+}
+
 func (m *MessagerServer) Create(peer string, oid ObjectID, value Value) error {
 	return nil
 }
@@ -347,23 +380,6 @@ func (m *MessagerServer) Delete(peer string, oid ObjectID, oiId InstanceID, rid 
 	// check response code
 	if rsp.Message().Code == coap.CodeDeleted {
 		log.Debugf("delete operation against %s done", uri)
-		return nil
-	}
-
-	return GetCodeError(rsp.Message().Code)
-}
-
-func (m *MessagerServer) Finish(peer string) error {
-	req := m.NewConRequestPlainText(coap.Get, BootstrapFinishUri)
-	rsp, err := m.SendRequest(peer, req)
-	if err != nil {
-		log.Errorln("bootstrap finish operation failed:", err)
-		return err
-	}
-
-	// check response code
-	if rsp.Message().Code == coap.CodeChanged {
-		log.Debugf("bootstrap finish operation done")
 		return nil
 	}
 

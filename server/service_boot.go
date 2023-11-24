@@ -83,11 +83,10 @@ type BootstrapServerDelegator struct {
 	server *LwM2MServer
 	// TODO: lock protection?
 	clients map[string]BootstrapContext //name -> addr
-	service BootstrapService
 }
 
 func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
-	if b.service == nil {
+	if b.server.bootstrapService == nil {
 		return NotImplemented
 	}
 
@@ -105,13 +104,13 @@ func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
 
 	b.save(ctx)
 
-	err := b.service.Bootstrap(ctx)
+	err := b.server.bootstrapService.Bootstrap(ctx)
 	if err != nil {
 		return err
 	}
 
 	time.AfterFunc(500*time.Millisecond, func() {
-		err = b.service.Bootstrapping(ctx)
+		err = b.server.bootstrapService.Bootstrapping(ctx)
 		if err != nil {
 			log.Errorln("bootstrap failed in procedure:", err)
 		}
@@ -123,7 +122,7 @@ func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
 }
 
 func (b *BootstrapServerDelegator) OnPackRequest(name string) ([]byte, error) {
-	if b.service == nil {
+	if b.server.bootstrapService == nil {
 		return nil, NotImplemented
 	}
 
@@ -133,7 +132,7 @@ func (b *BootstrapServerDelegator) OnPackRequest(name string) ([]byte, error) {
 		create: time.Now(),
 	}
 
-	pack, err := b.service.BootstrapPack(ctx)
+	pack, err := b.server.bootstrapService.BootstrapPack(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +153,6 @@ func (b *BootstrapServerDelegator) get(name string) BootstrapContext {
 func NewBootstrapServerDelegator(server *LwM2MServer) BootstrapServer {
 	s := &BootstrapServerDelegator{
 		server:  server,
-		service: server.bootstrapService,
 		clients: make(map[string]BootstrapContext),
 	}
 
@@ -202,5 +200,5 @@ func (b *bootstrapContext) Delete(oid ObjectID, oiId InstanceID) error {
 }
 
 func (b *bootstrapContext) Finish() error {
-	return b.owner.server.messager.Finish(b.addr)
+	return b.owner.server.messager.BootstrapFinish(b.addr)
 }

@@ -9,14 +9,12 @@ import (
 // RegisterServiceDelegator delegates application layer logic
 // for client registration procedure at server side.
 type RegisterServiceDelegator struct {
-	server  *LwM2MServer
-	service RegistrationService
+	server *LwM2MServer
 }
 
 func NewRegistrationServerDelegator(server *LwM2MServer) RegistrationServer {
 	s := &RegisterServiceDelegator{
-		server:  server,
-		service: server.registerService,
+		server: server,
 	}
 
 	return s
@@ -29,8 +27,8 @@ func (s *RegisterServiceDelegator) OnRegister(info *RegistrationInfo) (string, e
 		return "", err
 	}
 
-	if s.service.Register != nil {
-		if _, err := s.service.Register(info); err != nil {
+	if s.server.registerService.Register != nil {
+		if _, err := s.server.registerService.Register(info); err != nil {
 			return "", err
 		}
 	}

@@ -1,5 +1,9 @@
 package core
 
+import "github.com/zourva/lwm2m/coap"
+
+type ObserveHandler = func(notifiedData []byte)
+
 type ReportingServer interface {
 	// Observe implements Observe operation
 	//  method: GET with Observe option = 0
@@ -17,7 +21,7 @@ type ReportingServer interface {
 	//    4.04 Not Found URI of Operation is not found
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
-	Observe(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, attrs map[string]any) error
+	Observe(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, attrs map[string]any, h ObserveHandler) error
 
 	// CancelObservation implements Cancel Observation operation
 	//  method: GET with Observe option= 1
@@ -48,7 +52,7 @@ type ReportingServer interface {
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
 	//    4.15 Unsupported content format The specified format is not supported
-	ObserveComposite() error
+	ObserveComposite(contentType coap.MediaType, reqBody []byte, h ObserveHandler) error
 
 	// CancelObservationComposite implements Cancel ObservationComposite operation
 	//  method: FETCH with Observe option= 1
@@ -60,15 +64,7 @@ type ReportingServer interface {
 	//    4.04 Not Found URI of Operation is not found
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
-	CancelObservationComposite() error
-
-	OnNotify(c RegisteredClient, value []byte) error
-
-	// OnSend may respond code:
-	//    2.04 Changed "Send" operation completed successfully
-	//    4.00 Undetermined error occurred
-	//    4.04 Not Found Reported Object was not registered to the LwM2M Server
-	OnSend(c RegisteredClient, value []byte) ([]byte, error)
+	CancelObservationComposite(contentType coap.MediaType, reqBody []byte) error
 }
 
 type ReportingClient interface {
