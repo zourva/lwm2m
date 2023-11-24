@@ -280,27 +280,38 @@ func (c *LwM2MClient) clearBootstrapPending() {
 }
 
 func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
-	var list []*regServerInfo
-	servers := c.store.GetInstances(OmaObjectServer)
-	for _, server := range servers {
-		// TODO: retrieve from server
-		server.SingleField(LwM2MServerLifetime).Get()
-
-		list = append(list, &regServerInfo{
-			lifetime:          defaultLifetime,
-			blocking:          true,
-			bootstrap:         true,
-			address:           "127.0.0.1:5683",
-			priorityOrder:     1,
-			initRegDelay:      defInitRegistrationDelay,
-			commRetryLimit:    defCommRetryCount,
-			commRetryDelay:    defCommRetryTimer,
-			commSeqRetryDelay: defCommSeqDelayTimer,
-			commSeqRetryLimit: defCommSeqRetryCount,
-		})
-	}
-
-	return list
+	//var list []*regServerInfo
+	//servers := c.store.GetInstances(OmaObjectServer)
+	//for _, server := range servers {
+	//	server.SingleField(LwM2MServerLifetime).Get()
+	//
+	//	list = append(list, &regServerInfo{
+	//		lifetime:          defaultLifetime,
+	//		blocking:          true,
+	//		bootstrap:         true,
+	//		address:           "127.0.0.1:5683",
+	//		priorityOrder:     1,
+	//		initRegDelay:      defInitRegistrationDelay,
+	//		commRetryLimit:    defCommRetryCount,
+	//		commRetryDelay:    defCommRetryTimer,
+	//		commSeqRetryDelay: defCommSeqDelayTimer,
+	//		commSeqRetryLimit: defCommSeqRetryCount,
+	//	})
+	//}
+	//
+	//return list
+	return []*regServerInfo{{
+		lifetime:          defaultLifetime,
+		blocking:          true,
+		bootstrap:         true,
+		address:           "127.0.0.1:5683",
+		priorityOrder:     1,
+		initRegDelay:      defInitRegistrationDelay,
+		commRetryLimit:    defCommRetryCount,
+		commRetryDelay:    defCommRetryTimer,
+		commSeqRetryDelay: defCommSeqDelayTimer,
+		commSeqRetryLimit: defCommSeqRetryCount,
+	}}
 }
 
 // Start runs the client's state-driven loop.

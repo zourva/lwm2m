@@ -2,12 +2,9 @@ package client
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
-	"github.com/zourva/lwm2m/utils"
 	"github.com/zourva/pareto/box/meta"
 	"math"
 	"sort"
@@ -99,7 +96,7 @@ type Registrar struct {
 	*meta.StateMachine[state]
 	client *LwM2MClient //lwm2m context
 
-	messager Messager
+	messager *MessagerClient
 
 	regInfo   *regInfo
 	servers   []*regServerInfo
@@ -305,30 +302,7 @@ func (r *Registrar) Register() error {
 	// update reg info
 	r.regInfo.setLifetime(r.currentServer().lifetime)
 
-	// send request
-	req := r.messager.NewConRequestCoRELink(coap.Post, RegisterUri)
-	req.SetUriQuery("ep", r.regInfo.name)
-	req.SetUriQuery("lt", utils.IntToStr(r.regInfo.lifetime))
-	req.SetUriQuery("lwm2m", lwM2MVersion)
-	req.SetUriQuery("b", r.regInfo.mode)
-	req.SetStringPayload(r.regInfo.objects)
-	rsp, err := r.messager.Send(req)
-	if err != nil {
-		log.Errorln("send register request failed:", err)
-		return err
-	}
-
-	// check response code
-	if rsp.Message().Code == coap.CodeCreated {
-		// save location for update or de-register operation
-		r.regInfo.location = rsp.Message().GetLocationPath()
-		log.Infoln("register done with assigned location:", r.regInfo.location)
-		return nil
-	}
-
-	log.Errorln("register request failed:", coap.CodeString(rsp.Message().Code))
-
-	return errors.New(rsp.Message().GetCodeString())
+	return r.messager.Register(r.regInfo)
 }
 
 // Update requests with parameters like:
@@ -338,32 +312,7 @@ func (r *Registrar) Register() error {
 //		where location has a format of /rd/{id} and b/Q/sms are optional.
 //	body: </1/0>,... which is optional.
 func (r *Registrar) Update(params ...string) error {
-	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
-	req := r.messager.NewConRequestCoRELink(coap.Post, uri)
-
-	for _, param := range params {
-		if param == "lt" {
-			req.SetUriQuery("lt", utils.IntToStr(r.regInfo.lifetime))
-		} else if param == "objlink" {
-			req.SetStringPayload(r.regInfo.objects)
-		}
-	}
-
-	rsp, err := r.messager.Send(req)
-	if err != nil {
-		log.Errorln("send update request failed:", err)
-		return err
-	}
-
-	// check response code
-	if rsp.Message().Code == coap.CodeChanged {
-		log.Infoln("update done on", uri)
-		return nil
-	}
-
-	log.Errorln("update request failed:", coap.CodeString(rsp.Message().Code))
-
-	return errors.New(coap.CodeString(rsp.Message().Code))
+	return r.messager.Update(r.regInfo, params...)
 }
 
 // Deregister request with parameters like:
@@ -372,23 +321,7 @@ func (r *Registrar) Update(params ...string) error {
 //	 uri: /{location}
 //		 where location has a format of /rd/{id}
 func (r *Registrar) Deregister() error {
-	uri := RegisterUri + fmt.Sprintf("/%s", r.regInfo.location)
-	req := r.messager.NewConRequestCoRELink(coap.Delete, uri)
-	rsp, err := r.messager.Send(req)
-	if err != nil {
-		log.Errorln("send de-register request failed:", err)
-		return err
-	}
-
-	// check response code
-	if rsp.Message().Code == coap.CodeDeleted {
-		log.Infoln("deregister done on", uri)
-		return nil
-	}
-
-	log.Errorln("de-register request failed:", coap.CodeString(rsp.Message().Code))
-
-	return errors.New(coap.CodeString(rsp.Message().Code))
+	return r.messager.Deregister(r.regInfo)
 }
 
 func (r *Registrar) Registered() bool {
