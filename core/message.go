@@ -10,6 +10,7 @@ import (
 // MUST be Confirmable CoAP messages.
 type Messager interface {
 	NewRequest(t coap.MessageType, m coap.Code, mt coap.MediaType, uri string) coap.Request
+	NewConRequestCoRELink(method coap.Code, uri string) coap.Request
 	NewConRequestPlainText(method coap.Code, uri string) coap.Request
 	NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.Request
 	NewGetRequest(uri string) coap.Request
@@ -47,6 +48,10 @@ func (m *BaseMessager) NewPiggybackedResponse(req coap.Request, code coap.Code, 
 
 func (m *BaseMessager) NewGetRequest(uri string) coap.Request {
 	return m.NewRequest(coap.MessageConfirmable, coap.Get, coap.MediaTypeTextPlain, uri)
+}
+
+func (m *BaseMessager) NewConRequestCoRELink(method coap.Code, uri string) coap.Request {
+	return m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeApplicationLinkFormat, uri)
 }
 
 func (m *BaseMessager) NewConRequestPlainText(method coap.Code, uri string) coap.Request {

@@ -6,35 +6,14 @@ import (
 )
 
 type ReportingServerDelegator struct {
-	server  *LwM2MServer
-	service ReportingService
-}
-
-func (r *ReportingServerDelegator) Observe(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID, attrs map[string]any) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r *ReportingServerDelegator) CancelObservation(oid core.ObjectID, oiId core.InstanceID, rid core.ResourceID, riId core.InstanceID) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r *ReportingServerDelegator) ObserveComposite() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r *ReportingServerDelegator) CancelObservationComposite() error {
-	//TODO implement me
-	panic("implement me")
+	server *LwM2MServer
 }
 
 func (r *ReportingServerDelegator) OnNotify(c core.RegisteredClient, value []byte) error {
 	log.Tracef("receive Notify operation data %d bytes", len(value))
 
-	if r.service.Notify != nil {
-		_, err := r.service.Notify(c, value)
+	if r.server.reportService.Notify != nil {
+		_, err := r.server.reportService.Notify(c, value)
 		return err
 	}
 
@@ -44,17 +23,16 @@ func (r *ReportingServerDelegator) OnNotify(c core.RegisteredClient, value []byt
 func (r *ReportingServerDelegator) OnSend(c core.RegisteredClient, value []byte) ([]byte, error) {
 	log.Tracef("receive Send operation data %d bytes", len(value))
 
-	if r.service.Send != nil {
-		return r.service.Send(c, value)
+	if r.server.reportService.Send != nil {
+		return r.server.reportService.Send(c, value)
 	}
 
 	return nil, nil
 }
 
-func NewReportingServerDelegator(server *LwM2MServer, service ReportingService) core.ReportingServer {
+func NewReportingServerDelegator(server *LwM2MServer) *ReportingServerDelegator {
 	s := &ReportingServerDelegator{
-		server:  server,
-		service: service,
+		server: server,
 	}
 	return s
 }

@@ -1,10 +1,13 @@
 package client
 
 import (
+	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"github.com/zourva/lwm2m/endec"
+	"github.com/zourva/lwm2m/utils"
 )
 
 type connState = int
@@ -285,4 +288,80 @@ func (m *MessagerClient) Notify(observationId string, data []byte) error {
 
 func (m *MessagerClient) Connected() bool {
 	return m.state == connected
+}
+
+func (m *MessagerClient) Register(info *regInfo) error {
+	// send request
+	req := m.NewConRequestCoRELink(coap.Post, RegisterUri)
+	req.SetUriQuery("ep", info.name)
+	req.SetUriQuery("lt", utils.IntToStr(info.lifetime))
+	req.SetUriQuery("lwm2m", lwM2MVersion)
+	req.SetUriQuery("b", info.mode)
+	req.SetStringPayload(info.objects)
+	rsp, err := m.Send(req)
+	if err != nil {
+		log.Errorln("send register request failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeCreated {
+		// save location for update or de-register operation
+		info.location = rsp.Message().GetLocationPath()
+		log.Infoln("register done with assigned location:", info.location)
+		return nil
+	}
+
+	log.Errorln("register request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(rsp.Message().GetCodeString())
+}
+
+func (m *MessagerClient) Update(info *regInfo, params ...string) error {
+	uri := RegisterUri + fmt.Sprintf("/%s", info.location)
+	req := m.NewConRequestCoRELink(coap.Post, uri)
+
+	for _, param := range params {
+		if param == "lt" {
+			req.SetUriQuery("lt", utils.IntToStr(info.lifetime))
+		} else if param == "objlink" {
+			req.SetStringPayload(info.objects)
+		}
+	}
+
+	rsp, err := m.Send(req)
+	if err != nil {
+		log.Errorln("send update request failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeChanged {
+		log.Infoln("update done on", uri)
+		return nil
+	}
+
+	log.Errorln("update request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(coap.CodeString(rsp.Message().Code))
+}
+
+func (m *MessagerClient) Deregister(info *regInfo) error {
+	uri := RegisterUri + fmt.Sprintf("/%s", info.location)
+	req := m.NewConRequestCoRELink(coap.Delete, uri)
+	rsp, err := m.Send(req)
+	if err != nil {
+		log.Errorln("send de-register request failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeDeleted {
+		log.Infoln("deregister done on", uri)
+		return nil
+	}
+
+	log.Errorln("de-register request failed:", coap.CodeString(rsp.Message().Code))
+
+	return errors.New(coap.CodeString(rsp.Message().Code))
 }

@@ -9,16 +9,12 @@ import (
 // RegisterServiceDelegator delegates application layer logic
 // for client registration procedure at server side.
 type RegisterServiceDelegator struct {
-	server    *LwM2MServer
-	clientMgr RegisterManager
-	service   RegistrationService
+	server *LwM2MServer
 }
 
-func NewRegistrationServerDelegator(server *LwM2MServer, service RegistrationService) RegistrationServer {
+func NewRegistrationServerDelegator(server *LwM2MServer) RegistrationServer {
 	s := &RegisterServiceDelegator{
-		server:    server,
-		service:   service,
-		clientMgr: server.registerManager,
+		server: server,
 	}
 
 	return s
@@ -31,30 +27,30 @@ func (s *RegisterServiceDelegator) OnRegister(info *RegistrationInfo) (string, e
 		return "", err
 	}
 
-	if s.service.Register != nil {
-		if _, err := s.service.Register(info); err != nil {
+	if s.server.registerService.Register != nil {
+		if _, err := s.server.registerService.Register(info); err != nil {
 			return "", err
 		}
 	}
 
 	// existence check: removes the old one
-	client := s.clientMgr.GetByAddr(info.Address)
+	client := s.server.clientManager.GetByAddr(info.Address)
 	if client != nil {
-		s.clientMgr.DeleteByLocation(client.Name())
+		s.server.clientManager.DeleteByLocation(client.Name())
 	}
 
 	// create and save the session
-	client = s.clientMgr.Add(info)
+	client = s.server.clientManager.Add(info)
 
 	return client.Location(), nil
 }
 
 func (s *RegisterServiceDelegator) OnUpdate(info *RegistrationInfo) error {
-	return s.clientMgr.Update(info)
+	return s.server.clientManager.Update(info)
 }
 
 func (s *RegisterServiceDelegator) OnDeregister(location string) {
-	s.clientMgr.DeleteByLocation(location)
+	s.server.clientManager.DeleteByLocation(location)
 }
 
 func (s *RegisterServiceDelegator) validateRegInfo(info *RegistrationInfo) error {

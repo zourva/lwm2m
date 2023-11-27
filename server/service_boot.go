@@ -2,6 +2,7 @@ package server
 
 import (
 	log "github.com/sirupsen/logrus"
+	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"time"
 )
@@ -45,7 +46,7 @@ type BootstrapContext interface {
 	//    2.05 Content
 	//    4.00 Bad Request
 	//    4.04 Not Found
-	Discover(oid ObjectID) ([]byte, error)
+	Discover(oid ObjectID) ([]*coap.CoreResource, error)
 
 	// Write implements BootstrapWrite operation
 	//  method: PUT
@@ -82,11 +83,10 @@ type BootstrapServerDelegator struct {
 	server *LwM2MServer
 	// TODO: lock protection?
 	clients map[string]BootstrapContext //name -> addr
-	service BootstrapService
 }
 
 func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
-	if b.service == nil {
+	if b.server.bootstrapService == nil {
 		return NotImplemented
 	}
 
@@ -104,13 +104,13 @@ func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
 
 	b.save(ctx)
 
-	err := b.service.Bootstrap(ctx)
+	err := b.server.bootstrapService.Bootstrap(ctx)
 	if err != nil {
 		return err
 	}
 
 	time.AfterFunc(500*time.Millisecond, func() {
-		err = b.service.Bootstrapping(ctx)
+		err = b.server.bootstrapService.Bootstrapping(ctx)
 		if err != nil {
 			log.Errorln("bootstrap failed in procedure:", err)
 		}
@@ -122,7 +122,7 @@ func (b *BootstrapServerDelegator) OnRequest(name, addr string) error {
 }
 
 func (b *BootstrapServerDelegator) OnPackRequest(name string) ([]byte, error) {
-	if b.service == nil {
+	if b.server.bootstrapService == nil {
 		return nil, NotImplemented
 	}
 
@@ -132,7 +132,7 @@ func (b *BootstrapServerDelegator) OnPackRequest(name string) ([]byte, error) {
 		create: time.Now(),
 	}
 
-	pack, err := b.service.BootstrapPack(ctx)
+	pack, err := b.server.bootstrapService.BootstrapPack(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -150,10 +150,9 @@ func (b *BootstrapServerDelegator) get(name string) BootstrapContext {
 	return b.clients[name]
 }
 
-func NewBootstrapServerDelegator(server *LwM2MServer, service BootstrapService) BootstrapServer {
+func NewBootstrapServerDelegator(server *LwM2MServer) BootstrapServer {
 	s := &BootstrapServerDelegator{
 		server:  server,
-		service: service,
 		clients: make(map[string]BootstrapContext),
 	}
 
@@ -188,18 +187,18 @@ func (b *bootstrapContext) Read(oid ObjectID) ([]byte, error) {
 	return b.owner.server.messager.Read(b.addr, oid, NoneID, NoneID, NoneID)
 }
 
-func (b *bootstrapContext) Discover(oid ObjectID) ([]byte, error) {
-	return b.owner.server.messager.Discover(b.addr, oid)
+func (b *bootstrapContext) Discover(oid ObjectID) ([]*coap.CoreResource, error) {
+	return b.owner.server.messager.BootstrapDiscover(b.addr, oid)
 }
 
 func (b *bootstrapContext) Write(oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
-	return b.owner.server.messager.Write(b.addr, oid, oiId, rid, value)
+	return b.owner.server.messager.BootstrapWrite(b.addr, oid, oiId, rid, value)
 }
 
 func (b *bootstrapContext) Delete(oid ObjectID, oiId InstanceID) error {
-	return b.owner.server.messager.Delete(b.addr, oid, oiId)
+	return b.owner.server.messager.BootstrapDelete(b.addr, oid, oiId)
 }
 
 func (b *bootstrapContext) Finish() error {
-	return b.owner.server.messager.Finish(b.addr)
+	return b.owner.server.messager.BootstrapFinish(b.addr)
 }

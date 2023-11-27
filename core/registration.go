@@ -24,6 +24,8 @@ type RegistrationServer interface {
 }
 
 type RegisteredClient interface {
+	DeviceControlServer
+	ReportingServer
 	Name() string
 	Address() string
 	Location() string
@@ -31,7 +33,10 @@ type RegisteredClient interface {
 	Update(info *RegistrationInfo)
 	GetObjectClass(t ObjectID) Object
 	RegistrationInfo() *RegistrationInfo
-	DeviceControlProxy
+
+	Enable()
+	Disable()
+	Enabled() bool
 }
 
 // RegistrationInfo defines registered client
@@ -53,13 +58,14 @@ type RegistrationInfo struct {
 	BindingMode BindingMode `msgpack:"bindingMode"`
 
 	// mandatory objects and instances, excluding
-	// object 0, 21, and 23
+	// object 0, 21, and 23, CoRE-Link format.
 	ObjectInstances []*coap.CoreResource `msgpack:"objectInstances"`
 
-	Location       string    `msgpack:"location"`
-	RegisterTime   time.Time `msgpack:"registerTime"`
-	DeregisterTime time.Time `msgpack:"deregisterTime"`
-	UpdateTime     time.Time `msgpack:"updateTime"`
+	Location       string    `msgpack:"location"`       //temporary id
+	RegisterTime   time.Time `msgpack:"registerTime"`   //register operation time
+	RegRenewTime   time.Time `msgpack:"renewTime"`      //last time when refresh lifetime
+	DeregisterTime time.Time `msgpack:"deregisterTime"` //unregister operation time
+	UpdateTime     time.Time `msgpack:"updateTime"`     //update operation time
 }
 
 func (r *RegistrationInfo) Update(info *RegistrationInfo) {
@@ -67,7 +73,13 @@ func (r *RegistrationInfo) Update(info *RegistrationInfo) {
 	r.Address = info.Address
 	r.LwM2MVersion = info.LwM2MVersion
 	r.BindingMode = info.BindingMode
-	r.ObjectInstances = info.ObjectInstances
+	if len(info.ObjectInstances) > 0 {
+		r.ObjectInstances = info.ObjectInstances
+	}
 
 	r.UpdateTime = time.Now()
+
+	if info.Lifetime > 0 {
+		r.RegRenewTime = r.UpdateTime
+	}
 }

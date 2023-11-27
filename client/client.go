@@ -1,67 +1,13 @@
 package client
 
 import (
-	piondtls "github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"github.com/zourva/pareto/box/meta"
-	"strings"
 	"sync/atomic"
 	"time"
 )
-
-// Options defines client options.
-type Options struct {
-	registry ObjectRegistry
-	store    ObjectInstanceStore
-	//provider      OperatorProvider
-	//storage       InstanceStorageManager
-	serverAddress []string
-	localAddress  string
-	dtlsConf      *piondtls.Config
-}
-
-type Option func(*Options)
-
-// WithLocalAddress provides local address as a hint.
-// If not provided or the hinted address cannot be set
-// the default address ":0" is used.
-func WithLocalAddress(local string) Option {
-	return func(s *Options) {
-		s.localAddress = local
-	}
-}
-
-// WithServerAddresses provides server list in an ";"
-// separated string, e.g.:
-//
-//	1.0.0.1:5683;1.0.0.2:5683
-//
-// When not provided, "127.0.0.1:5683" is used.
-func WithServerAddresses(addrString string) Option {
-	return func(s *Options) {
-		servers := strings.Split(addrString, ";")
-		for _, server := range servers {
-			s.serverAddress = append(s.serverAddress, server)
-		}
-	}
-}
-
-// WithObjectStore provides an object instance persistent
-// layer accessor. If it is not provided, the default
-// in-memory object instance store is used.
-//func WithObjectStore(store ObjectInstanceStore) Option {
-//	return func(s *Options) {
-//		s.store = store
-//	}
-//}
-
-func WithObjectClassRegistry(registry ObjectRegistry) Option {
-	return func(s *Options) {
-		s.registry = registry
-	}
-}
 
 // New returns a LwM2M client with the mandatory name
 // and other options, or nil when any failure occurred.

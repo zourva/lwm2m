@@ -1,20 +1,29 @@
 package core
 
-// DeviceControlProxy defines operations on registered client
+import "github.com/zourva/lwm2m/coap"
+
+// DeviceControlServer defines operations on registered client
 // on server side using proxy/delegation pattern.
 // It the Device Management and Service Enablement Interface,
 // which is used by the LwM2M Server to access object instances and
 // resources available from a registered client
-type DeviceControlProxy interface {
+type DeviceControlServer interface {
 	Create(oid ObjectID, newValue Value) error
-	Read(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error
+	Read(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) ([]byte, error)
 	Write(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) error
 	Delete(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error
 	Execute(oid ObjectID, oiId InstanceID, rid ResourceID, args string) error
-	Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) error
+	Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoreResource, error)
 	//ReadComposite()
 	//WriteComposite()
 	//WriteAttributes()
+
+	//	//Create(client RegisteredClient, oid ObjectID, newValue Value) error
+	//	//Read(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error
+	//	//Write(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID, newValue Value) error
+	//	//Delete(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, resInstId InstanceID) error
+	//	//Execute(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, args string) error
+	//	//Discover(client RegisteredClient, oid ObjectID, instId InstanceID, resId ResourceID, depth int) error
 }
 
 // DeviceControlClient defines client side operations

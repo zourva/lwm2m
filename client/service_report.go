@@ -76,10 +76,9 @@ func (r *Reporter) Send(value []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	r.resetFailCounter()
-
 	// check response code
 	if rsp.Message().Code == coap.CodeChanged {
+		r.resetFailCounter()
 		log.Traceln("send opaque request done")
 		return rsp.Payload(), nil
 	}
