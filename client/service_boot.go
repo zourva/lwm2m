@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	"github.com/zourva/lwm2m/core"
@@ -88,14 +89,27 @@ func (r *Bootstrapper) PackRequest() error {
 	}
 
 	//check response code
-	if rsp.Message().Code == coap.CodeContent {
+	msg := rsp.Message()
+	if msg.Code == coap.CodeContent {
 		log.Infof("bootstrap pack request done with %d bytes response", len(rsp.Payload()))
+
+		objs, err := core.ParseObjectInstancesWithJSON(r.client.store.ObjectRegistry(), msg.Payload.String())
+		if err != nil {
+			log.Errorf("bootstrap pack parse object failed")
+			return fmt.Errorf("parse failed")
+		}
+
+		err = r.client.saveObjectInstances(objs)
+		if err != nil {
+			log.Errorf("bootstrap save pack response info failed, err:%v", err)
+			return err
+		}
 
 		// TODO: save cookies from server
 		return nil
 	}
 
-	return errors.New(coap.CodeString(rsp.Message().Code))
+	return errors.New(coap.CodeString(msg.Code))
 }
 
 func (r *Bootstrapper) OnRead() (*core.ResourceField, error) {
@@ -179,7 +193,7 @@ func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
 }
 
 func (r *Bootstrapper) Start() bool {
-	r.lastAttempt = time.Now()
+	r.lastAttempt = time.Now() //.Add(60 * time.Second)
 	return r.Startup()
 }
 
@@ -192,7 +206,8 @@ func (r *Bootstrapper) Bootstrapped() bool {
 }
 
 func (r *Bootstrapper) Timeout() bool {
-	return time.Now().Sub(r.lastAttempt) > 60*time.Second
+	return time.Since(r.lastAttempt) > 60*time.Second
+	//return time.Now().Sub(r.lastAttempt)
 }
 
 func (r *Bootstrapper) onInitiating(_ any) {

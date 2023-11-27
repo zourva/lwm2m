@@ -392,7 +392,8 @@ func (r *Registrar) Update(params ...string) error {
 }
 
 func (r *Registrar) Registered() bool {
-	return r.GetState() == registered
+	state := r.GetState()
+	return state == registered
 }
 
 func (r *Registrar) Start() bool {

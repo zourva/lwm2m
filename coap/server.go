@@ -38,12 +38,17 @@ func NewServer(name, local, remote string) Server {
 	localAddr, _ := net.ResolveUDPAddr("udp", localHost)
 
 	var remoteAddr *net.UDPAddr
+	var err error
 	if remote != "" {
 		remoteHost := remote
 		if !strings.Contains(remoteHost, ":") {
 			remoteHost = ":" + remoteHost
 		}
-		remoteAddr, _ = net.ResolveUDPAddr("udp", remoteHost)
+		remoteAddr, err = net.ResolveUDPAddr("udp", remoteHost)
+		if err != nil {
+			log.Fatalf("resolve udp address(%s) failed, err:%v", remoteHost, err)
+			return nil
+		}
 	}
 
 	return &DefaultCoapServer{
@@ -457,7 +462,7 @@ func (s *DefaultCoapServer) Dial(host string) {
 }
 
 func (s *DefaultCoapServer) Dial6(host string) {
-	remoteAddr, _ := net.ResolveUDPAddr("udp", host)
+	remoteAddr, _ := net.ResolveUDPAddr("udp6", host)
 
 	s.remoteAddr = remoteAddr
 }

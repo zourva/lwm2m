@@ -46,10 +46,10 @@ func (s *DBStorage) Open() error {
 		return err
 	}
 
-	//err = s.ImportPreset()
-	//if err != nil {
-	//	return err
-	//}
+	err = s.ImportPreset()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -74,21 +74,49 @@ func (s *DBStorage) Load() error {
 
 	for _, record := range all {
 		instance := s.deserialize(&record)
-		s.store.GetInstanceManager(record.OId).Add(instance)
+		if instance != nil {
+			s.store.GetInstanceManager(instance.Class().Id()).Add(instance)
+		}
 	}
 
 	return nil
 }
-
+func (s *DBStorage) uniqueId(instance ObjectInstance) uint32 {
+	unique := uint32(instance.Class().Id()+1)<<16 | uint32(instance.Id()+1)
+	return unique
+}
 func (s *DBStorage) Flush() error {
+	var err error
+	total := 0
+	for _, im := range s.store.GetInstanceManagers() {
+		for _, instance := range im.GetAll() {
+			record := s.serialize(instance)
+			upsert := s.db.Update
+
+			unique := s.uniqueId(instance)
+			err = s.db.One("unique", unique, &ObjectRecord{})
+			if err != nil {
+				upsert = s.db.Save
+			}
+
+			err = upsert(record)
+			if err != nil {
+				log.Errorln("boltdb import ObjectRecord failed:", err)
+				return err
+			}
+
+			total++
+		}
+	}
+
+	log.Debugf("boltdb upsert ObjectRecord total records: %d", total)
 	return nil
 }
 
 func (s *DBStorage) serialize(instance ObjectInstance) *ObjectRecord {
 	record := &ObjectRecord{
-		OId:    instance.Class().Id() + 1,
-		OIId:   instance.Id() + 1,
-		Fields: instance.AllFields(),
+		Unique:  s.uniqueId(instance),
+		Content: instance.String(),
 	}
 
 	return record
@@ -96,15 +124,14 @@ func (s *DBStorage) serialize(instance ObjectInstance) *ObjectRecord {
 
 func (s *DBStorage) deserialize(record *ObjectRecord) ObjectInstance {
 	registry := s.store.ObjectRegistry()
-	class := registry.GetObject(record.OId)
-	instance := NewObjectInstance(class)
-	instance.SetAllFields(record.Fields)
-	err := instance.Construct()
+
+	instance, err := ParseObjectInstancesWithJSON(registry, record.Content)
 	if err != nil {
+		log.Errorf("parse object with json failed, err:%v, string:%s", err, record.Content)
 		return nil
 	}
 
-	return instance
+	return instance[0]
 }
 
 func (s *DBStorage) getDBObject(oid ObjectID) *DBObject {

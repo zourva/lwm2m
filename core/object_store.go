@@ -36,7 +36,7 @@ type ObjectInstanceStore interface {
 	//GetInstanceManager returns the instance manager
 	//for the given object and create a new one if not found.
 	GetInstanceManager(id ObjectID) *InstanceManager
-	GetInstanceManagers() map[ObjectID]*InstanceManager
+	GetInstanceManagers() InstanceMgrMap
 	GetInstances(id ObjectID) InstanceMap
 
 	// GetInstance returns instance of an object
@@ -179,7 +179,10 @@ func (s *objectInstanceStore) GetInstances(id ObjectID) InstanceMap {
 // GetInstance returns instance of an object
 // class or nil if not exist.
 func (s *objectInstanceStore) GetInstance(oid ObjectID, inst InstanceID) ObjectInstance {
-	return s.managers[oid].Get(inst)
+	if v, ok := s.managers[oid]; ok {
+		return v.Get(inst)
+	}
+	return nil
 }
 
 // GetSingleInstance returns instance 0 of
@@ -299,14 +302,17 @@ func (i *InstanceManager) Add( /*id InstanceID,*/ object ObjectInstance) {
 }
 
 func (i *InstanceManager) Get(id InstanceID) ObjectInstance {
-	return i.instances[id]
+	if v, ok := i.instances[id]; ok {
+		return v
+	}
+	return nil
 }
 
 func (i *InstanceManager) Empty() bool {
 	return len(i.instances) == 0
 }
 
-func (i *InstanceManager) GetAll() map[InstanceID]ObjectInstance {
+func (i *InstanceManager) GetAll() InstanceMap {
 	return i.instances
 }
 

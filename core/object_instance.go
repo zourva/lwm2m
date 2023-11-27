@@ -1,5 +1,12 @@
 package core
 
+import (
+	"fmt"
+	log "github.com/sirupsen/logrus"
+	"github.com/zourva/pareto/endec/senml"
+	"strconv"
+)
+
 type InstanceID = uint16
 
 const (
@@ -35,6 +42,10 @@ type ObjectInstance interface {
 
 	// SetSingleField overwrites Field(id, 0)
 	SetSingleField(f Field)
+
+	MarshalJSON() ([]byte, error)
+
+	String() string
 }
 
 type InstanceMap = map[InstanceID]ObjectInstance
@@ -138,4 +149,108 @@ func (o *BaseInstance) SetFields(rid ResourceID, fields []Field) {
 
 func (o *BaseInstance) SetAllFields(all map[ResourceID][]Field) {
 	o.resources = all
+}
+
+func (o *BaseInstance) String() string {
+	tmp, _ := o.MarshalJSON()
+	return string(tmp)
+}
+
+func (o *BaseInstance) MarshalJSON() ([]byte, error) {
+	var pack senml.Pack
+	var records []senml.Record
+
+	oid, iid := o.Class().Id(), o.Id()
+	bname := `/` + strconv.Itoa(int(oid)) + `/` + strconv.Itoa(int(iid)) + `/`
+	for fid, f := range o.AllFields() {
+		for _, fi := range f {
+			name := strconv.Itoa(int(fid))
+			if fi.InstanceID() != 0 {
+				name = name + `/` + strconv.Itoa(int(fi.InstanceID()))
+			}
+
+			r := fieldValueToSenmlRecord(fi)
+			r.BaseName = bname
+			r.Name = name
+			// TODO:: add more record fields
+
+			records = append(records, *r)
+
+			bname = "" // 将 bname 清理干净
+		}
+	}
+	pack.Records = records
+
+	return senml.Encode(pack, senml.JSON)
+}
+
+func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]ObjectInstance, error) {
+	var err error
+	var ori, normalize senml.Pack
+
+	ori, err = senml.Decode([]byte(str), senml.JSON)
+	if err != nil {
+		log.Errorf("senml decode failed, err:%v", err)
+		return nil, err
+	}
+
+	normalize, err = senml.Normalize(ori)
+	if err != nil {
+		log.Errorf("senml normalize failed, err:%v", err)
+		return nil, err
+	}
+
+	var ids []uint16
+	var curObj ObjectInstance
+	var objects []ObjectInstance
+	for i := 0; i < len(normalize.Records); i++ {
+		r := &normalize.Records[i]
+		if ids, err = pathToIds(r.Name, "/"); err != nil || len(ids) < 3 {
+			return nil, fmt.Errorf("invalid path:%s, err:%v", r.Name, err)
+		}
+
+		oid, iid, fid, fiid := ids[0], ids[1], ids[2], uint16(0)
+		if len(ids) > 3 {
+			fiid = ids[3]
+		}
+
+		if curObj == nil || curObj.Class().Id() != oid || curObj.Id() != iid {
+			if curObj != nil {
+				err = curObj.Construct()
+				if err != nil {
+					return nil, err
+				}
+				// append
+				objects = append(objects, curObj)
+				curObj = nil
+			}
+
+			obj := registry.GetObject(oid)
+			if obj == nil {
+				log.Errorf("parse object with senml failed, unsupported object(%d)", oid)
+				return nil, fmt.Errorf("unsupported object(%d)", oid)
+			}
+
+			// new objects
+			curObj = NewObjectInstance(obj)
+			curObj.SetId(iid)
+		}
+
+		// add field
+		res := curObj.Class().Resource(fid)
+		val := senmlRecordToFieldValue(res.Type(), r)
+
+		field := NewResourceField2(fiid, res, val)
+		curObj.AddField(field)
+	}
+
+	if curObj != nil {
+		err = curObj.Construct()
+		if err != nil {
+			return nil, err
+		}
+		// append
+		objects = append(objects, curObj)
+	}
+	return objects, nil
 }
