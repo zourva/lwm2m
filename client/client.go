@@ -64,7 +64,12 @@ type LwM2MClient struct {
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
-	c.coapConn = coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0], coap.DefaultTimeout)
+	c.coapConn = coap.NewServer(
+		c.name,
+		c.options.localAddress,
+		c.options.serverAddress[0],
+		c.options.sendTimeout,
+		c.options.recvTimeout)
 	c.messager = NewMessager(c)
 	//c.bootstrapper = NewBootstrapper(c)
 	//c.registrar = NewRegistrar(c)
@@ -230,7 +235,7 @@ func (c *LwM2MClient) onRegistering(_ any) {
 }
 
 func (c *LwM2MClient) onServicing(_ any) {
-	log.Traceln("client is servicing")
+	//log.Traceln("client is servicing")
 
 	// check bootstrap first
 	if c.bootstrapRequired() {
@@ -276,6 +281,13 @@ func (c *LwM2MClient) makeDefaults() {
 
 	if len(c.options.localAddress) == 0 {
 		c.options.localAddress = ":0"
+	}
+
+	if c.options.sendTimeout == 0 {
+		c.options.sendTimeout = coap.DefaultTimeout
+	}
+	if c.options.recvTimeout == 0 {
+		c.options.recvTimeout = coap.DefaultTimeout
 	}
 }
 

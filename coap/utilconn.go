@@ -63,7 +63,7 @@ func SendMessageTo(msgCtx *MessageContext) (Response, error) {
 
 	if timeout == 0 {
 		// 针对每个请求如果没有设置请求超时时间，则读取server默认配置的超时时间
-		timeout = c.GetTimeout()
+		timeout = c.GetRecvTimeout()
 	}
 
 	select {
@@ -71,7 +71,7 @@ func SendMessageTo(msgCtx *MessageContext) (Response, error) {
 		return respCh.Response, respCh.Error
 	case <-time.After(timeout):
 		DeleteResponseChannel(c, msg.Id)
-		return nil, ErrTimeout
+		return nil, ErrRecvTimeout
 	}
 }
 

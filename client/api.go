@@ -41,8 +41,9 @@ type Options struct {
 	localAddress  string
 	//dtlsConf      *piondtls.Config
 
-	// send timeout
-	timeout time.Duration
+	// request timeout
+	sendTimeout time.Duration
+	recvTimeout time.Duration
 }
 
 type Option func(*Options)
@@ -73,7 +74,13 @@ func WithServerAddresses(addrString string) Option {
 
 func WithServerSendTimeout(timeout time.Duration) Option {
 	return func(s *Options) {
-		s.timeout = timeout
+		s.sendTimeout = timeout
+	}
+}
+
+func WithServerRecvTimeout(timeout time.Duration) Option {
+	return func(s *Options) {
+		s.recvTimeout = timeout
 	}
 }
 

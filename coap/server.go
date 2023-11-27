@@ -23,18 +23,18 @@ const (
 )
 
 func NewLocalServer(name string) Server {
-	return NewServer(name, "5683", "", DefaultTimeout)
+	return NewServer(name, "5683", "", DefaultTimeout, DefaultTimeout)
 }
 
 func NewCoapServer(name string, local string) Server {
-	return NewServer(name, local, "", DefaultTimeout)
+	return NewServer(name, local, "", DefaultTimeout, DefaultTimeout)
 }
 
 func NewCoapClient(name string) Server {
-	return NewServer(name, "0", "", DefaultTimeout)
+	return NewServer(name, "0", "", DefaultTimeout, DefaultTimeout)
 }
 
-func NewServer(name, local, remote string, timeout time.Duration) Server {
+func NewServer(name, local, remote string, sto, rto time.Duration) Server {
 	localHost := local
 	if !strings.Contains(localHost, ":") {
 		localHost = ":" + localHost
@@ -55,12 +55,16 @@ func NewServer(name, local, remote string, timeout time.Duration) Server {
 		}
 	}
 
-	if timeout == 0 {
-		timeout = DefaultTimeout
+	if sto == 0 {
+		sto = DefaultTimeout
+	}
+	if rto == 0 {
+		rto = DefaultTimeout
 	}
 	return &DefaultCoapServer{
 		name:                    name,
-		timeout:                 timeout,
+		sendTimeout:             sto,
+		recvTimeout:             rto,
 		remoteAddr:              remoteAddr,
 		localAddr:               localAddr,
 		events:                  NewEvents(),
@@ -75,10 +79,11 @@ func NewServer(name, local, remote string, timeout time.Duration) Server {
 }
 
 type DefaultCoapServer struct {
-	name       string
-	timeout    time.Duration
-	localAddr  *net.UDPAddr
-	remoteAddr *net.UDPAddr
+	name        string
+	sendTimeout time.Duration
+	recvTimeout time.Duration
+	localAddr   *net.UDPAddr
+	remoteAddr  *net.UDPAddr
 
 	localConn  *net.UDPConn
 	remoteConn *net.UDPConn
@@ -105,8 +110,12 @@ func (s *DefaultCoapServer) GetName() string {
 	return s.name
 }
 
-func (s *DefaultCoapServer) GetTimeout() time.Duration {
-	return s.timeout
+func (s *DefaultCoapServer) GetSendTimeout() time.Duration {
+	return s.sendTimeout
+}
+
+func (s *DefaultCoapServer) GetRecvTimeout() time.Duration {
+	return s.recvTimeout
 }
 
 func (s *DefaultCoapServer) GetEvents() *Events {
