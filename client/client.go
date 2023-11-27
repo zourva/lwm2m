@@ -64,7 +64,7 @@ type LwM2MClient struct {
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
-	c.coapConn = coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0])
+	c.coapConn = coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0], coap.DefaultTimeout)
 	c.messager = NewMessager(c)
 	//c.bootstrapper = NewBootstrapper(c)
 	//c.registrar = NewRegistrar(c)
@@ -248,6 +248,7 @@ func (c *LwM2MClient) onServicing(_ any) {
 
 	// checking health of components
 	if c.reporter.FailureCounter() > 3 {
+		c.reporter.resetFailCounter()
 		c.initiateRegister()
 		return
 	}

@@ -3,6 +3,7 @@ package coap
 import (
 	"bytes"
 	"errors"
+	"github.com/zourva/pareto/box/concurrent"
 	"log"
 	"net"
 	"strconv"
@@ -17,20 +18,23 @@ const (
 	ProxyHTTP ProxyType = 0
 	ProxyCOAP ProxyType = 1
 )
+const (
+	DefaultTimeout = 5 * time.Second
+)
 
 func NewLocalServer(name string) Server {
-	return NewServer(name, "5683", "")
+	return NewServer(name, "5683", "", DefaultTimeout)
 }
 
 func NewCoapServer(name string, local string) Server {
-	return NewServer(name, local, "")
+	return NewServer(name, local, "", DefaultTimeout)
 }
 
 func NewCoapClient(name string) Server {
-	return NewServer(name, "0", "")
+	return NewServer(name, "0", "", DefaultTimeout)
 }
 
-func NewServer(name, local, remote string) Server {
+func NewServer(name, local, remote string, timeout time.Duration) Server {
 	localHost := local
 	if !strings.Contains(localHost, ":") {
 		localHost = ":" + localHost
@@ -51,8 +55,12 @@ func NewServer(name, local, remote string) Server {
 		}
 	}
 
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
 	return &DefaultCoapServer{
 		name:                    name,
+		timeout:                 timeout,
 		remoteAddr:              remoteAddr,
 		localAddr:               localAddr,
 		events:                  NewEvents(),
@@ -61,12 +69,14 @@ func NewServer(name, local, remote string) Server {
 		fnHandleHTTPProxy:       NullProxyHandler,
 		fnProxyFilter:           NullProxyFilter,
 		stopChannel:             make(chan int),
+		lock:                    concurrent.NewSpinLock(),
 		coapResponseChannelsMap: make(map[uint16]chan *CoapResponseChannel),
 	}
 }
 
 type DefaultCoapServer struct {
 	name       string
+	timeout    time.Duration
 	localAddr  *net.UDPAddr
 	remoteAddr *net.UDPAddr
 
@@ -87,11 +97,16 @@ type DefaultCoapServer struct {
 
 	stopChannel chan int
 
+	lock                    sync.Locker
 	coapResponseChannelsMap map[uint16]chan *CoapResponseChannel
 }
 
 func (s *DefaultCoapServer) GetName() string {
 	return s.name
+}
+
+func (s *DefaultCoapServer) GetTimeout() time.Duration {
+	return s.timeout
 }
 
 func (s *DefaultCoapServer) GetEvents() *Events {
@@ -316,6 +331,13 @@ func (s *DefaultCoapServer) Send(req Request) (Response, error) {
 		// log.Println("Block 1 was set")
 	}
 
+	msgCtx := MessageContext{
+		server:  s,
+		msg:     msg,
+		conn:    NewUDPConnection(s.localConn),
+		addr:    s.remoteAddr,
+		timeout: req.GetTimeout(),
+	}
 	if opt != nil {
 		blockOpt := Block1OptionFromOption(opt)
 		if blockOpt.Value == nil {
@@ -361,7 +383,8 @@ func (s *DefaultCoapServer) Send(req Request) (Response, error) {
 					msg.Payload = NewBytesPayload(blockPayload)
 
 					// send message
-					response, err := SendMessageTo(s, msg, NewUDPConnection(s.localConn), s.remoteAddr)
+					msgCtx.msg = msg
+					response, err := SendMessageTo(&msgCtx)
 					if err != nil {
 						s.events.Error(err)
 						wg.Done()
@@ -380,7 +403,8 @@ func (s *DefaultCoapServer) Send(req Request) (Response, error) {
 
 	s.events.Message(msg, false)
 
-	response, err := SendMessageTo(s, msg, NewUDPConnection(s.localConn), s.remoteAddr)
+	msgCtx.msg = msg
+	response, err := SendMessageTo(&msgCtx)
 
 	if err != nil {
 		s.events.Error(err)
@@ -398,7 +422,7 @@ func (s *DefaultCoapServer) storeNewOutgoingBlockMessage(client string, payload 
 }
 
 func (s *DefaultCoapServer) SendTo(req Request, addr *net.UDPAddr) (Response, error) {
-	return SendMessageTo(s, req.Message(), NewUDPConnection(s.localConn), addr)
+	return SendMessageTo(&MessageContext{server: s, msg: req.Message(), conn: NewUDPConnection(s.localConn), addr: addr})
 }
 
 func (s *DefaultCoapServer) NotifyChange(resource, value string, confirm bool) {
@@ -558,18 +582,24 @@ func NewResponseChannel() (ch chan *CoapResponseChannel) {
 func AddResponseChannel(c Server, msgId uint16, ch chan *CoapResponseChannel) {
 	s := c.(*DefaultCoapServer)
 
+	s.lock.Lock()
 	s.coapResponseChannelsMap[msgId] = ch
+	s.lock.Unlock()
 }
 
 func DeleteResponseChannel(c Server, msgId uint16) {
 	s := c.(*DefaultCoapServer)
 
+	s.lock.Lock()
 	delete(s.coapResponseChannelsMap, msgId)
+	s.lock.Unlock()
 }
 
 func GetResponseChannel(c Server, msgId uint16) (ch chan *CoapResponseChannel) {
 	s := c.(*DefaultCoapServer)
+	s.lock.Lock()
 	ch = s.coapResponseChannelsMap[msgId]
+	s.lock.Unlock()
 
 	return
 }

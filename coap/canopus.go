@@ -197,6 +197,7 @@ var ErrNoMatchingMethod = errors.New("no matching method")
 var ErrNilMessage = errors.New("message is nil")
 var ErrNilConn = errors.New("connection object is nil")
 var ErrNilAddr = errors.New("address cannot be nil")
+var ErrTimeout = errors.New("timeout")
 var ErrMessageSizeTooLongBlockOptionValNotSet = errors.New("message is too long, block option or value not set")
 
 // Interfaces
@@ -217,6 +218,8 @@ type Server interface {
 	NotifyChange(resource, value string, confirm bool)
 	Dial(host string)
 	Dial6(host string)
+
+	GetTimeout() time.Duration
 
 	OnNotify(fn FnEventNotify)
 	OnStart(fn FnEventStart)

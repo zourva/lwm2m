@@ -72,7 +72,7 @@ func (r *Reporter) Send(value []byte) ([]byte, error) {
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		r.incrementFailCounter()
-		log.Errorln("send opaque request failed: %v, ", err)
+		log.Errorf("send opaque request failed: %v ", err)
 		return nil, err
 	}
 

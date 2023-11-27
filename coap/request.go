@@ -4,6 +4,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // NewRequest creates a new coap Request
@@ -85,6 +86,8 @@ type Request interface {
 	SetConfirmable(con bool)
 	SetToken(t string)
 	SetUriQuery(k string, v string)
+	SetTimeout(to time.Duration)
+	GetTimeout() time.Duration
 }
 
 // DefaultCoapRequest wraps a CoAP Message as a Request
@@ -95,6 +98,7 @@ type DefaultCoapRequest struct {
 	conn   *net.UDPConn
 	addr   *net.UDPAddr
 	server *Server
+	to     time.Duration
 }
 
 func (c *DefaultCoapRequest) SetProxyUri(uri string) {
@@ -172,4 +176,12 @@ func (c *DefaultCoapRequest) UriQuery(q string) string {
 
 func (c *DefaultCoapRequest) SetUriQuery(k string, v string) {
 	c.Message().AddOption(OptionURIQuery, k+"="+v)
+}
+
+func (c *DefaultCoapRequest) SetTimeout(t time.Duration) {
+	c.to = t
+}
+
+func (c *DefaultCoapRequest) GetTimeout() time.Duration {
+	return c.to
 }
