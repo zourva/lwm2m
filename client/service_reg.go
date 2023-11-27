@@ -200,6 +200,8 @@ func (r *Registrar) enablePeriodicUpdate() {
 			return
 		}
 
+		log.Tracef("registrar update successfully")
+
 		if len(params) > 0 {
 			r.regInfo.setLifetime(r.regInfo.lifetime)
 		}
