@@ -5,9 +5,9 @@ import (
 	"github.com/zourva/lwm2m/core"
 )
 
-// ClientEventObserver defines lifecycle event
+// RegisteredClientObserver defines lifecycle event
 // observers/callbacks for a LwM2M client.
-type ClientEventObserver interface {
+type RegisteredClientObserver interface {
 	// Bootstrapped invoked after client is bootstrapped
 	Bootstrapped(epName string)
 
@@ -18,13 +18,13 @@ type ClientEventObserver interface {
 	Updated(c core.RegisteredClient)
 
 	// Unregistered invoked after client unregistered
-	Unregistered(epName string)
+	Unregistered(c core.RegisteredClient)
 
 	// DeviceOperated invoked after any resource of and object is operated
-	DeviceOperated(c core.RegisteredClient, objs []core.ObjectInstance)
+	//DeviceOperated(c core.RegisteredClient, objs []core.ObjectInstance)
 }
 
-// DefaultEventObserver implements ClientEventObserver
+// DefaultEventObserver implements RegisteredClientObserver
 // and provides a dummy operation for each event.
 type DefaultEventObserver struct {
 }
@@ -44,8 +44,8 @@ func (d *DefaultEventObserver) Updated(c core.RegisteredClient) {
 	return
 }
 
-func (d *DefaultEventObserver) Unregistered(epName string) {
-	log.Infof("client %s is deregistered", epName)
+func (d *DefaultEventObserver) Unregistered(c core.RegisteredClient) {
+	log.Infof("client %s is deregistered", c.Name())
 	return
 }
 
@@ -54,7 +54,7 @@ func (d *DefaultEventObserver) DeviceOperated(c core.RegisteredClient, objs []co
 	return
 }
 
-var _ ClientEventObserver = &DefaultEventObserver{}
+var _ RegisteredClientObserver = &DefaultEventObserver{}
 
 func NewDefaultEventObserver() *DefaultEventObserver {
 	return &DefaultEventObserver{}

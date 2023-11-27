@@ -32,8 +32,8 @@ type MessagerServer struct {
 func NewMessager(server *LwM2MServer) *MessagerServer {
 	m := &MessagerServer{
 		server:  server,
-		network: "udp",
-		address: server.options.address,
+		network: server.network,
+		address: server.address,
 	}
 
 	//m.router = coap2.NewRouter()
@@ -174,7 +174,7 @@ func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 	log.Debugf("Register operation processed")
 
 	//enable device management when registration succeeded
-	m.server.clientManager.Enable(clientId)
+	m.server.manager.Enable(clientId)
 
 	return rsp
 }
@@ -238,7 +238,7 @@ func (m *MessagerServer) onClientDeregister(req coap.Request) coap.Response {
 
 	log.Debugf("Deregister operation processed")
 
-	m.server.clientManager.Disable(id)
+	m.server.manager.Disable(id)
 
 	return m.NewPiggybackedResponse(req, coap.CodeDeleted, coap.NewEmptyPayload())
 }
@@ -255,7 +255,7 @@ func (m *MessagerServer) onSendInfo(req coap.Request) coap.Response {
 	log.Debugf("receive info via Send operation, size=%d bytes", len(data))
 
 	// get registered client bound to this info
-	c := m.server.clientManager.GetByAddr(req.Address().String())
+	c := m.server.manager.GetByAddr(req.Address().String())
 	if c == nil {
 		log.Errorf("not registered or address changed, " +
 			"a new registration is needed and the info sent is ignored")

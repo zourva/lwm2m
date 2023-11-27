@@ -33,9 +33,9 @@ type RegisteredClientManager interface {
 func NewRegisteredClientManager(server *LwM2MServer) RegisteredClientManager {
 	r := &sessionManager{
 		server:   server,
-		store:    server.options.store,
-		provider: server.options.provider,
-		registry: server.options.registry,
+		store:    server.store,
+		provider: server.provider,
+		registry: server.registry,
 
 		sessions:  make(map[string]core.RegisteredClient),
 		indexAddr: make(map[string]core.RegisteredClient),
@@ -77,8 +77,10 @@ func (r *sessionManager) Enable(location string) {
 		return
 	}
 
+	r.server.observer.Registered(client)
+	//r.server.evtMgr.EmitEvent(core.EventClientRegistered, client)
+
 	client.Enable()
-	r.server.evtMgr.EmitEvent(core.EventClientRegistered, client)
 }
 
 func (r *sessionManager) Disable(location string) {
@@ -88,8 +90,10 @@ func (r *sessionManager) Disable(location string) {
 		return
 	}
 
+	r.server.observer.Unregistered(client)
+	//r.server.evtMgr.EmitEvent(core.EventClientUnregistered, client)
+
 	client.Disable()
-	r.server.evtMgr.EmitEvent(core.EventClientUnregistered, client)
 }
 
 // loop used to maintain session states.
@@ -202,6 +206,8 @@ func (r *sessionManager) Update(info *core.RegistrationInfo) error {
 		log.Errorln("update registration info failed:", err)
 		return err
 	}
+
+	r.server.observer.Updated(session)
 
 	return nil
 }

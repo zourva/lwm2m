@@ -12,7 +12,7 @@ type RegisterServiceDelegator struct {
 	server *LwM2MServer
 }
 
-func NewRegistrationServerDelegator(server *LwM2MServer) RegistrationServer {
+func NewRegistrationServerDelegator(server *LwM2MServer) *RegisterServiceDelegator {
 	s := &RegisterServiceDelegator{
 		server: server,
 	}
@@ -34,23 +34,23 @@ func (s *RegisterServiceDelegator) OnRegister(info *RegistrationInfo) (string, e
 	}
 
 	// existence check: removes the old one
-	client := s.server.clientManager.GetByAddr(info.Address)
+	client := s.server.manager.GetByAddr(info.Address)
 	if client != nil {
-		s.server.clientManager.DeleteByLocation(client.Name())
+		s.server.manager.DeleteByLocation(client.Name())
 	}
 
 	// create and save the session
-	client = s.server.clientManager.Add(info)
+	client = s.server.manager.Add(info)
 
 	return client.Location(), nil
 }
 
 func (s *RegisterServiceDelegator) OnUpdate(info *RegistrationInfo) error {
-	return s.server.clientManager.Update(info)
+	return s.server.manager.Update(info)
 }
 
 func (s *RegisterServiceDelegator) OnDeregister(location string) {
-	s.server.clientManager.DeleteByLocation(location)
+	s.server.manager.DeleteByLocation(location)
 }
 
 func (s *RegisterServiceDelegator) validateRegInfo(info *RegistrationInfo) error {

@@ -51,45 +51,34 @@ type ReportingService interface {
 type DeviceControlService interface {
 }
 
-// Options defines options application can
-// provide when creating a LwM2M server.
-type Options struct {
-	registry core.ObjectRegistry
-	provider GuidProvider //
-	store    RegInfoStore //registered client info store
-	address  string       //binding address
-	stats    Statistics
-	observer ClientEventObserver
-}
-
-type Option func(*Options)
+type Option func(s *LwM2MServer)
 
 func WithBindingAddress(addr string) Option {
-	return func(s *Options) {
+	return func(s *LwM2MServer) {
 		s.address = addr
 	}
 }
 
-func WithClientEventObserver(observer ClientEventObserver) Option {
-	return func(s *Options) {
+func WithClientEventObserver(observer RegisteredClientObserver) Option {
+	return func(s *LwM2MServer) {
 		s.observer = observer
 	}
 }
 
 func WithGuidProvider(provider GuidProvider) Option {
-	return func(s *Options) {
+	return func(s *LwM2MServer) {
 		s.provider = provider
 	}
 }
 
 func WithRegistrationInfoStore(store RegInfoStore) Option {
-	return func(s *Options) {
+	return func(s *LwM2MServer) {
 		s.store = store
 	}
 }
 
 func WithObjectClassRegistry(registry core.ObjectRegistry) Option {
-	return func(s *Options) {
+	return func(s *LwM2MServer) {
 		s.registry = registry
 	}
 }

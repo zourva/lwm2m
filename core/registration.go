@@ -17,11 +17,11 @@ type RegistrationClient interface {
 	Update(params ...string) error
 }
 
-type RegistrationServer interface {
-	OnRegister(*RegistrationInfo) (string, error)
-	OnUpdate(*RegistrationInfo) error
-	OnDeregister(location string)
-}
+//type RegistrationServer interface {
+//	OnRegister(*RegistrationInfo) (string, error)
+//	OnUpdate(*RegistrationInfo) error
+//	OnDeregister(location string)
+//}
 
 type RegisteredClient interface {
 	DeviceControlServer

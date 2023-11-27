@@ -139,6 +139,8 @@ func (b *BootstrapServerDelegator) OnPackRequest(name string) ([]byte, error) {
 
 	log.Infof("bootstrap-pack-request from %s accepted", name)
 
+	b.server.observer.Bootstrapped(name)
+
 	return pack, nil
 }
 
@@ -150,7 +152,7 @@ func (b *BootstrapServerDelegator) get(name string) BootstrapContext {
 	return b.clients[name]
 }
 
-func NewBootstrapServerDelegator(server *LwM2MServer) BootstrapServer {
+func NewBootstrapServerDelegator(server *LwM2MServer) *BootstrapServerDelegator {
 	s := &BootstrapServerDelegator{
 		server:  server,
 		clients: make(map[string]BootstrapContext),

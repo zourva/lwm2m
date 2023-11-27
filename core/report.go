@@ -21,7 +21,7 @@ type ReportingServer interface {
 	//    4.04 Not Found URI of Operation is not found
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
-	Observe(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, attrs map[string]any, h ObserveHandler) error
+	Observe(oid ObjectID, attrs NotificationAttrs, h ObserveHandler, moreIds ...uint16) error
 
 	// CancelObservation implements Cancel Observation operation
 	//  method: GET with Observe option= 1
@@ -70,7 +70,7 @@ type ReportingServer interface {
 type ReportingClient interface {
 	// OnObserve implements server side logic of Observe operation defined in coap.
 	// observationId must have the format of /oid/oiid/rid/riid
-	OnObserve(observationId string, attrs map[string]any) error
+	OnObserve(observationId string, attrs NotificationAttrs) error
 	OnCancelObservation(observationId string) error
 	OnObserveComposite() error
 	OnCancelObservationComposite() error

@@ -123,7 +123,20 @@ func (c *registeredClient) Discover(oid ObjectID, oiId InstanceID, rid ResourceI
 	return c.server.messager.Discover(c.Address(), oid, oiId, rid, depth)
 }
 
-func (c *registeredClient) Observe(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, attrs map[string]any, h ObserveHandler) error {
+func (c *registeredClient) Observe(oid ObjectID, attrs NotificationAttrs, h ObserveHandler, moreIds ...uint16) error {
+	oiId, rid, riId := NoneID, NoneID, NoneID
+	if len(moreIds) > 0 {
+		oiId = moreIds[0]
+	}
+
+	if len(moreIds) > 1 {
+		rid = moreIds[1]
+	}
+
+	if len(moreIds) > 2 {
+		riId = moreIds[2]
+	}
+
 	return c.server.messager.Observe(c.Address(), oid, oiId, rid, riId, attrs, h)
 }
 

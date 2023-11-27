@@ -1,19 +1,19 @@
 package server
 
-// Statistics defined for the server.
-type Statistics interface {
-	IncrementRequestCount()
-	GetRequestCount() uint64
-}
-
-type DefaultStatistics struct {
+type Statistics struct {
 	requestCount uint64
 }
 
-func (s *DefaultStatistics) IncrementRequestCount() {
+func NewStatistics() *Statistics {
+	return &Statistics{
+		requestCount: 0,
+	}
+}
+
+func (s *Statistics) IncrementRequestCount() {
 	s.requestCount++
 }
 
-func (s *DefaultStatistics) GetRequestCount() uint64 {
+func (s *Statistics) GetRequestCount() uint64 {
 	return s.requestCount
 }

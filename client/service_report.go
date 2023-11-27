@@ -36,7 +36,7 @@ func NewReporter(c *LwM2MClient) *Reporter {
 	return r
 }
 
-func (r *Reporter) OnObserve(observationId string, attrs map[string]any) error {
+func (r *Reporter) OnObserve(observationId string, attrs core.NotificationAttrs) error {
 	r.observer.add(observationId, attrs, nil)
 	return core.ErrorNone
 }
@@ -105,7 +105,7 @@ type Observation struct {
 	oiId  core.InstanceID
 	rid   core.ResourceID
 	riId  core.InstanceID
-	attrs map[string]any
+	attrs core.NotificationAttrs
 
 	key   string //joined path
 	token []byte
@@ -130,7 +130,7 @@ func (o *Observer) get(key string) *Observation {
 	return nil
 }
 
-func (o *Observer) add(key string, attrs map[string]any, token []byte) {
+func (o *Observer) add(key string, attrs core.NotificationAttrs, token []byte) {
 	//key := o.makeKey(oid, oiId, rid, riId)
 	o.observations[key] = &Observation{
 		//oid:     oid,

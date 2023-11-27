@@ -40,39 +40,39 @@ type BootstrapClient interface {
 	//SecurityCredentials() *SecurityCredentials
 }
 
-type BootstrapServer interface {
-	OnRequest(ep, addr string) error
-	OnPackRequest(ep string) ([]byte, error)
-
-	//// Read implements Read operation
-	////  method: GET
-	////  format: TLV, LwM2M CBOR, SenML CBOR or SenML JSON
-	////  path: /{Object ID} in LwM2M 1.1 and thereafter, Object ID MUST be '1'
-	////     (Server Object) or '2' (Access Control Object)
-	//Read(oid ObjectID)
-	//
-	//// Write implements Write operation
-	////  method: PUT
-	////  path: /{Object ID}
-	////        /{Object ID}/{optional Object Instance ID}
-	////        /{Object ID}/{optional Object Instance ID}/{optional Resource ID}
-	//Write(oid ObjectID, oiId InstanceID, rid ResourceID, value Value)
-	//
-	//// Delete implements Delete operation
-	////  method: DELETE
-	////  path: /{Object ID}/{Object Instance ID}
-	//Delete(oid ObjectID, oiId InstanceID)
-	//
-	//// Discover implements Discover operation
-	////  method: GET
-	////  path: /{Object ID}
-	//Discover(oid ObjectID)
-	//
-	//// Finish implements Finish operation
-	////  method: POST
-	////  path: /bs
-	//Finish()
-}
+//type BootstrapServer interface {
+//	OnRequest(ep, addr string) error
+//	OnPackRequest(ep string) ([]byte, error)
+//
+//	//// Read implements Read operation
+//	////  method: GET
+//	////  format: TLV, LwM2M CBOR, SenML CBOR or SenML JSON
+//	////  path: /{Object ID} in LwM2M 1.1 and thereafter, Object ID MUST be '1'
+//	////     (Server Object) or '2' (Access Control Object)
+//	//Read(oid ObjectID)
+//	//
+//	//// Write implements Write operation
+//	////  method: PUT
+//	////  path: /{Object ID}
+//	////        /{Object ID}/{optional Object Instance ID}
+//	////        /{Object ID}/{optional Object Instance ID}/{optional Resource ID}
+//	//Write(oid ObjectID, oiId InstanceID, rid ResourceID, value Value)
+//	//
+//	//// Delete implements Delete operation
+//	////  method: DELETE
+//	////  path: /{Object ID}/{Object Instance ID}
+//	//Delete(oid ObjectID, oiId InstanceID)
+//	//
+//	//// Discover implements Discover operation
+//	////  method: GET
+//	////  path: /{Object ID}
+//	//Discover(oid ObjectID)
+//	//
+//	//// Finish implements Finish operation
+//	////  method: POST
+//	////  path: /bs
+//	//Finish()
+//}
 
 // BootstrapServerBootstrapInfo is used by the LwM2M Client to contact the
 // LwM2M BootstrapServer to get the LwM2M Server Bootstrap Information.
