@@ -298,9 +298,11 @@ func (m *MessagerClient) Register(info *regInfo) error {
 	req.SetUriQuery("lwm2m", lwM2MVersion)
 	req.SetUriQuery("b", info.mode)
 	req.SetStringPayload(info.objects)
+
+	log.Infof("send register(%s) request...", info.name)
 	rsp, err := m.Send(req)
 	if err != nil {
-		log.Errorln("send register request failed:", err)
+		log.Errorf("send register(%s) request failed:%v", info.name, err)
 		return err
 	}
 
@@ -308,11 +310,11 @@ func (m *MessagerClient) Register(info *regInfo) error {
 	if rsp.Message().Code == coap.CodeCreated {
 		// save location for update or de-register operation
 		info.location = rsp.Message().GetLocationPath()
-		log.Infoln("register done with assigned location:", info.location)
+		log.Infof("register(%s) done with assigned location:%s", info.name, info.location)
 		return nil
 	}
 
-	log.Errorln("register request failed:", coap.CodeString(rsp.Message().Code))
+	log.Errorf("register(%s) request failed:%s", info.name, coap.CodeString(rsp.Message().Code))
 
 	return errors.New(rsp.Message().GetCodeString())
 }

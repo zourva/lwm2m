@@ -252,7 +252,10 @@ func (c *LwM2MClient) onServicing(_ any) {
 	}
 
 	// checking health of components
-	if c.reporter.FailureCounter() > 3 {
+	failed := c.reporter.FailureCounter()
+	if failed > 3 {
+		log.Errorf("client reported failure(%d) times exceed %d, "+
+			"enter the re-registration process.", failed, 3)
 		c.reporter.resetFailCounter()
 		c.initiateRegister()
 		return
