@@ -3,6 +3,7 @@ package client
 import (
 	"github.com/zourva/lwm2m/core"
 	"strings"
+	"time"
 )
 
 // Client defines api for application layer to use.
@@ -39,6 +40,10 @@ type Options struct {
 	serverAddress []string
 	localAddress  string
 	//dtlsConf      *piondtls.Config
+
+	// request timeout
+	sendTimeout time.Duration
+	recvTimeout time.Duration
 }
 
 type Option func(*Options)
@@ -64,6 +69,18 @@ func WithServerAddresses(addrString string) Option {
 		for _, server := range servers {
 			s.serverAddress = append(s.serverAddress, server)
 		}
+	}
+}
+
+func WithServerSendTimeout(timeout time.Duration) Option {
+	return func(s *Options) {
+		s.sendTimeout = timeout
+	}
+}
+
+func WithServerRecvTimeout(timeout time.Duration) Option {
+	return func(s *Options) {
+		s.recvTimeout = timeout
 	}
 }
 

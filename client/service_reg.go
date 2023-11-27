@@ -200,6 +200,8 @@ func (r *Registrar) enablePeriodicUpdate() {
 			return
 		}
 
+		log.Tracef("registrar update successfully")
+
 		if len(params) > 0 {
 			r.regInfo.setLifetime(r.regInfo.lifetime)
 		}
@@ -325,7 +327,8 @@ func (r *Registrar) Deregister() error {
 }
 
 func (r *Registrar) Registered() bool {
-	return r.GetState() == registered
+	state := r.GetState()
+	return state == registered
 }
 
 func (r *Registrar) Start() bool {

@@ -2,7 +2,11 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	log "github.com/sirupsen/logrus"
+	"github.com/zourva/pareto/endec/senml"
+	"strconv"
+	"strings"
 )
 
 var typeMap = map[string]ValueType{
@@ -80,7 +84,7 @@ func ParseObject(objJSON string) Object {
 	optSetString(objectMap["LwM2MVersion"], class.SetLwM2MVersion)
 	optSetString(objectMap["URN"], class.SetUrn)
 	optSetString(objectMap["Description"], class.SetDescription)
-	optSetBool(objectMap["Multiple"], class.SetMandatory)
+	optSetBool(objectMap["Multiple"], class.SetMultiple)
 	optSetBool(objectMap["Mandatory"], class.SetMandatory)
 
 	if objectMap["Resources"] != nil {
@@ -92,4 +96,108 @@ func ParseObject(objJSON string) Object {
 	class.SetOperator(NewBaseOperator())
 
 	return class
+}
+
+func pathToIds(src string, sep string) ([]uint16, error) {
+	var ids []uint16
+
+	if len(src) == 0 {
+		return nil, fmt.Errorf("empty source string")
+	}
+
+	keys := strings.Split(src, sep)
+	if keys[0] == "" && len(keys) > 1 {
+		// 跳过 第一个空的分割
+		keys = keys[1:]
+	}
+
+	for _, k := range keys {
+		if id, err := strconv.Atoi(k); err != nil {
+			log.Errorf("path to ids failed:%v, err:%v", src, err)
+			return nil, err
+		} else {
+			ids = append(ids, uint16(id))
+		}
+	}
+
+	return ids, nil
+}
+
+func fieldValueToSenmlRecord(src Field) *senml.Record {
+	r := &senml.Record{}
+	kind := src.Class().Type()
+	switch kind {
+	case ValueTypeEmpty:
+	case ValueTypeMultiple: //return &MultipleValue{}
+	case ValueTypeString:
+		tmp := src.ToString()
+		r.StringValue = &tmp
+	case ValueTypeByte:
+		tmp := src.ToString()
+		r.StringValue = &tmp
+	case ValueTypeInteger:
+		tmp := float64(src.Get().(int))
+		r.Value = &tmp
+	case ValueTypeInteger32:
+		tmp := float64(src.Get().(int32))
+		r.Value = &tmp
+	case ValueTypeInteger64:
+		tmp := float64(src.Get().(int64))
+		r.Value = &tmp
+	case ValueTypeFloat:
+		tmp := float64(src.Get().(float32))
+		r.Value = &tmp
+	case ValueTypeFloat64:
+		tmp := float64(src.Get().(float64))
+		r.Value = &tmp
+	case ValueTypeBoolean:
+		tmp := src.Get().(bool)
+		r.BoolValue = &tmp
+	case ValueTypeOpaque:
+		tmp := string(src.Get().([]byte))
+		r.OpaqueValue = &tmp
+	case ValueTypeTime:
+	case ValueTypeObjectLink:
+	case ValueTypeObject:
+	case ValueTypeResource:
+	case ValueTypeMultiResource:
+	}
+	return r
+}
+
+func senmlRecordToFieldValue(kind ValueType, val *senml.Record) Value {
+	switch kind {
+	case ValueTypeEmpty:
+		return Empty()
+	case ValueTypeMultiple: //return &MultipleValue{}
+	case ValueTypeString:
+		return String(*val.StringValue)
+	case ValueTypeByte:
+		return ByteVal([]byte(*val.StringValue)...)
+	case ValueTypeInteger:
+		return Integer(int(*val.Value))
+	case ValueTypeInteger32:
+		return Integer(int(*val.Value))
+	case ValueTypeInteger64:
+		return Integer(int(*val.Value))
+	case ValueTypeFloat:
+		return Float(float32(*val.Value))
+	case ValueTypeFloat64:
+		return Float64(*val.Value)
+	case ValueTypeBoolean:
+		return Boolean(*val.BoolValue)
+	case ValueTypeOpaque:
+		return Opaque([]byte(*val.OpaqueValue))
+	case ValueTypeTime:
+		return nil
+	case ValueTypeObjectLink:
+		return nil
+	case ValueTypeObject:
+		return nil
+	case ValueTypeResource:
+		return nil
+	case ValueTypeMultiResource:
+		return nil
+	}
+	return nil
 }

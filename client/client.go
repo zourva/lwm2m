@@ -19,8 +19,6 @@ func New(name string, store ObjectInstanceStore, opts ...Option) *LwM2MClient {
 		machine: meta.NewStateMachine[state](name, time.Second),
 	}
 
-	c.initiateBootstrap(bootstrapReasonStartup)
-
 	for _, f := range opts {
 		f(c.options)
 	}
@@ -66,7 +64,12 @@ type LwM2MClient struct {
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
-	c.coapConn = coap.NewServer(c.name, c.options.localAddress, c.options.serverAddress[0])
+	c.coapConn = coap.NewServer(
+		c.name,
+		c.options.localAddress,
+		c.options.serverAddress[0],
+		c.options.sendTimeout,
+		c.options.recvTimeout)
 	c.messager = NewMessager(c)
 	//c.bootstrapper = NewBootstrapper(c)
 	//c.registrar = NewRegistrar(c)
@@ -103,7 +106,26 @@ func (c *LwM2MClient) initialize() error {
 		return err
 	}
 
+	if c.hasRegistrationServer() {
+		// has been bootstrap
+		c.initiateRegister()
+	} else {
+		c.initiateBootstrap(bootstrapReasonStartup)
+	}
+
 	return nil
+}
+
+func (c *LwM2MClient) hasRegistrationServer() bool {
+	instances := c.store.GetInstances(OmaObjectSecurity)
+	for _, instance := range instances {
+		for _, f := range instance.Fields(LwM2MSecurityBootstrapServer) {
+			if !f.Get().(bool) { // BootstrapServer == true
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // get bootstrap server account from store, if any
@@ -120,6 +142,15 @@ func (c *LwM2MClient) getBootstrapServerAccount() *BootstrapServerAccount {
 	}
 
 	return nil
+}
+
+func (c *LwM2MClient) saveObjectInstances(objs []ObjectInstance) error {
+	for _, o := range objs {
+		im := c.store.GetInstanceManager(o.Class().Id())
+		im.Add(o)
+	}
+
+	return c.store.Flush()
 }
 
 func (c *LwM2MClient) doBootstrap() {
@@ -142,6 +173,8 @@ func (c *LwM2MClient) doBootstrap() {
 }
 
 func (c *LwM2MClient) doRegister() {
+	c.clearRegisterPending()
+
 	log.Infoln("client is ready to register")
 
 	//c.resetReportFailCounter()
@@ -202,7 +235,7 @@ func (c *LwM2MClient) onRegistering(_ any) {
 }
 
 func (c *LwM2MClient) onServicing(_ any) {
-	log.Traceln("client is servicing")
+	//log.Traceln("client is servicing")
 
 	// check bootstrap first
 	if c.bootstrapRequired() {
@@ -219,7 +252,11 @@ func (c *LwM2MClient) onServicing(_ any) {
 	}
 
 	// checking health of components
-	if c.reporter.FailureCounter() > 3 {
+	failed := c.reporter.FailureCounter()
+	if failed > 3 {
+		log.Errorf("client reported failure(%d) times exceed %d, "+
+			"enter the re-registration process.", failed, 3)
+		c.reporter.resetFailCounter()
 		c.initiateRegister()
 		return
 	}
@@ -247,6 +284,13 @@ func (c *LwM2MClient) makeDefaults() {
 
 	if len(c.options.localAddress) == 0 {
 		c.options.localAddress = ":0"
+	}
+
+	if c.options.sendTimeout == 0 {
+		c.options.sendTimeout = coap.DefaultTimeout
+	}
+	if c.options.recvTimeout == 0 {
+		c.options.recvTimeout = coap.DefaultTimeout
 	}
 }
 
@@ -279,39 +323,50 @@ func (c *LwM2MClient) clearBootstrapPending() {
 	c.bootstrapPending.Store(false)
 }
 
+func (c *LwM2MClient) clearRegisterPending() {
+	c.registerPending.Store(false)
+}
+
 func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
-	//var list []*regServerInfo
-	//servers := c.store.GetInstances(OmaObjectServer)
-	//for _, server := range servers {
-	//	server.SingleField(LwM2MServerLifetime).Get()
-	//
-	//	list = append(list, &regServerInfo{
-	//		lifetime:          defaultLifetime,
-	//		blocking:          true,
-	//		bootstrap:         true,
-	//		address:           "127.0.0.1:5683",
-	//		priorityOrder:     1,
-	//		initRegDelay:      defInitRegistrationDelay,
-	//		commRetryLimit:    defCommRetryCount,
-	//		commRetryDelay:    defCommRetryTimer,
-	//		commSeqRetryDelay: defCommSeqDelayTimer,
-	//		commSeqRetryLimit: defCommSeqRetryCount,
-	//	})
-	//}
-	//
-	//return list
-	return []*regServerInfo{{
-		lifetime:          defaultLifetime,
-		blocking:          true,
-		bootstrap:         true,
-		address:           "127.0.0.1:5683",
-		priorityOrder:     1,
-		initRegDelay:      defInitRegistrationDelay,
-		commRetryLimit:    defCommRetryCount,
-		commRetryDelay:    defCommRetryTimer,
-		commSeqRetryDelay: defCommSeqDelayTimer,
-		commSeqRetryLimit: defCommSeqRetryCount,
-	}}
+	var list []*regServerInfo
+	var ms = make(map[int]*regServerInfo)
+
+	// 在server列表中查找 Register server
+	instances := c.store.GetInstances(OmaObjectSecurity)
+	for _, instance := range instances {
+		if !instance.SingleField(LwM2MSecurityBootstrapServer).Get().(bool) { // BootstrapServer == true
+			address := instance.SingleField(LwM2MSecurityLwM2MServerURI).Get().(string)
+			shortId := instance.SingleField(LwM2MSecurityShortServerID).Get().(int)
+
+			ms[shortId] = &regServerInfo{
+				lifetime:          defaultLifetime,
+				blocking:          true,
+				bootstrap:         true,
+				address:           address,
+				priorityOrder:     1,
+				initRegDelay:      defInitRegistrationDelay,
+				commRetryLimit:    defCommRetryCount,
+				commRetryDelay:    defCommRetryTimer,
+				commSeqRetryDelay: defCommSeqDelayTimer,
+				commSeqRetryLimit: defCommSeqRetryCount,
+			}
+		}
+	}
+
+	// 在 Register server 列表中 获取 server 信息
+	servers := c.store.GetInstances(OmaObjectServer)
+	for _, server := range servers {
+		// TODO: retrieve from server
+		shortId := server.SingleField(LwM2MServerShortServerID).Get().(int)
+
+		if s, ok := ms[shortId]; ok {
+			lifetime := server.SingleField(LwM2MServerLifetime).Get().(int)
+			s.lifetime = uint64(lifetime)
+			list = append(list, s)
+		}
+	}
+
+	return list
 }
 
 // Start runs the client's state-driven loop.

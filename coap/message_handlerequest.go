@@ -143,7 +143,7 @@ func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *n
 				if err == nil {
 					s.GetEvents().Message(respMsg, false)
 
-					SendMessageTo(s, respMsg, NewUDPConnection(conn), addr)
+					SendMessageTo(&MessageContext{server: s, msg: respMsg, conn: NewUDPConnection(conn), addr: addr, timeout: req.GetTimeout()})
 				} else {
 
 				}
@@ -154,21 +154,21 @@ func handleRequest(s Server, err error, msg *Message, conn *net.UDPConn, addr *n
 
 func handleReqUnknownCriticalOption(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	if msg.Type == MessageConfirmable {
-		SendMessageTo(c, BadOptionMessage(msg.Id, MessageAcknowledgment), NewUDPConnection(conn), addr)
+		SendMessageTo(&MessageContext{server: c, msg: BadOptionMessage(msg.Id, MessageAcknowledgment), conn: NewUDPConnection(conn), addr: addr})
 	}
 	return
 }
 
 func handleReqBadRequest(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	if msg.Type == MessageConfirmable {
-		SendMessageTo(c, BadRequestMessage(msg.Id, msg.Type), NewUDPConnection(conn), addr)
+		SendMessageTo(&MessageContext{server: c, msg: BadRequestMessage(msg.Id, msg.Type), conn: NewUDPConnection(conn), addr: addr})
 	}
 	return
 }
 
 func handleReqContinue(c Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	if msg.Type == MessageConfirmable {
-		SendMessageTo(c, ContinueMessage(msg.Id, msg.Type), NewUDPConnection(conn), addr)
+		SendMessageTo(&MessageContext{server: c, msg: ContinueMessage(msg.Id, msg.Type), conn: NewUDPConnection(conn), addr: addr})
 	}
 	return
 }
@@ -178,12 +178,12 @@ func handleReqUnsupportedMethodRequest(c Server, msg *Message, conn *net.UDPConn
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	c.GetEvents().Message(ret, false)
-	SendMessageTo(c, ret, NewUDPConnection(conn), addr)
+	SendMessageTo(&MessageContext{server: c, msg: ret, conn: NewUDPConnection(conn), addr: addr})
 }
 
 func handleReqProxyRequest(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	if !s.AllowProxyForwarding(msg, addr) {
-		SendMessageTo(s, ForbiddenMessage(msg.Id, MessageAcknowledgment), NewUDPConnection(conn), addr)
+		SendMessageTo(&MessageContext{server: s, msg: ForbiddenMessage(msg.Id, MessageAcknowledgment), conn: NewUDPConnection(conn), addr: addr})
 	}
 
 	proxyURI := msg.GetOption(OptionProxyURI).StringValue()
@@ -201,7 +201,7 @@ func handleReqNoMatchingRoute(s Server, msg *Message, conn *net.UDPConn, addr *n
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 	ret.Token = msg.Token
 
-	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
+	SendMessageTo(&MessageContext{server: s, msg: ret, conn: NewUDPConnection(conn), addr: addr})
 }
 
 func handleReqNoMatchingMethod(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
@@ -209,7 +209,7 @@ func handleReqNoMatchingMethod(s Server, msg *Message, conn *net.UDPConn, addr *
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	s.GetEvents().Message(ret, false)
-	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
+	SendMessageTo(&MessageContext{server: s, msg: ret, conn: NewUDPConnection(conn), addr: addr})
 }
 
 func handleReqUnsupportedContentFormat(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
@@ -217,7 +217,7 @@ func handleReqUnsupportedContentFormat(s Server, msg *Message, conn *net.UDPConn
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	s.GetEvents().Message(ret, false)
-	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
+	SendMessageTo(&MessageContext{server: s, msg: ret, conn: NewUDPConnection(conn), addr: addr})
 }
 
 func handleReqDuplicateMessageID(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
@@ -225,14 +225,14 @@ func handleReqDuplicateMessageID(s Server, msg *Message, conn *net.UDPConn, addr
 	ret.CloneOptions(msg, OptionURIPath, OptionContentFormat)
 
 	s.GetEvents().Message(ret, false)
-	SendMessageTo(s, ret, NewUDPConnection(conn), addr)
+	SendMessageTo(&MessageContext{server: s, msg: ret, conn: NewUDPConnection(conn), addr: addr})
 }
 
 func handleRequestAutoAcknowledge(s Server, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {
 	ack := NewMessageOfType(MessageAcknowledgment, msg.Id)
 
 	s.GetEvents().Message(ack, false)
-	SendMessageTo(s, ack, NewUDPConnection(conn), addr)
+	SendMessageTo(&MessageContext{server: s, msg: ack, conn: NewUDPConnection(conn), addr: addr})
 }
 
 func handleReqObserve(s Server, req Request, msg *Message, conn *net.UDPConn, addr *net.UDPAddr) {

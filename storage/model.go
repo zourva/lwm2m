@@ -26,10 +26,9 @@ type ObjectDescriptor struct {
 }
 
 type ObjectRecord struct {
-	Pk     int             `storm:"id,increment"` //not used
-	OId    core.ObjectID   `storm:"index"`
-	OIId   core.InstanceID `storm:"index"`
-	Fields map[core.ResourceID][]core.Field
+	Pk      int    `storm:"id,increment"` //not used
+	Unique  uint32 `storm:"unique"`
+	Content string
 }
 
 type DBObject struct {

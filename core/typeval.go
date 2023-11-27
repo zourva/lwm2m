@@ -53,11 +53,31 @@ type Value interface {
 	// ToString returns a human-readable
 	// string representation of this value.
 	ToString() string
+
+	MarshalJSON() ([]byte, error)
+}
+
+var _ = []Value{
+	&MultipleValue{},
+	&StringValue{},
+	&IntegerValue{},
+	&TimeValue{},
+	&FloatValue{},
+	&Float64Value{},
+	&BooleanValue{},
+	&EmptyValue{},
+	&OpaqueValue{},
+	&ByteValue{},
 }
 
 type MultipleValue struct {
 	values        []Value
 	containedType ValueType
+}
+
+func (v *MultipleValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
 }
 
 func (v *MultipleValue) ContainedType() ValueType {
@@ -84,6 +104,11 @@ type StringValue struct {
 	value string
 }
 
+func (v *StringValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
+}
+
 func (v *StringValue) ToBytes() []byte {
 	return []byte(v.value)
 }
@@ -106,6 +131,11 @@ func (v *StringValue) ToString() string {
 
 type IntegerValue struct {
 	value int
+}
+
+func (v *IntegerValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
 }
 
 func (v *IntegerValue) ToBytes() []byte {
@@ -143,6 +173,11 @@ type TimeValue struct {
 	value time.Time
 }
 
+func (v *TimeValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
+}
+
 func (v *TimeValue) ToBytes() []byte {
 	return []byte(strconv.FormatInt(v.value.Unix(), 10))
 }
@@ -165,6 +200,11 @@ func (v *TimeValue) ToString() string {
 
 type FloatValue struct {
 	value float32
+}
+
+func (v *FloatValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
 }
 
 func (v *FloatValue) ToBytes() []byte {
@@ -194,6 +234,11 @@ type Float64Value struct {
 	value float64
 }
 
+func (v *Float64Value) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
+}
+
 func (v *Float64Value) ToBytes() []byte {
 	buf := new(bytes.Buffer)
 	_ = binary.Write(buf, binary.LittleEndian, v.value)
@@ -219,6 +264,11 @@ func (v *Float64Value) ToString() string {
 
 type BooleanValue struct {
 	value bool
+}
+
+func (v *BooleanValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
 }
 
 func (v *BooleanValue) ToBytes() []byte {
@@ -255,6 +305,11 @@ func Empty() Value {
 type EmptyValue struct {
 }
 
+func (v *EmptyValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
+}
+
 func (v *EmptyValue) ToBytes() []byte {
 	return []byte("")
 }
@@ -279,49 +334,59 @@ type OpaqueValue struct {
 	value []byte
 }
 
-func (o *OpaqueValue) Type() ValueType {
+func (v *OpaqueValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
+}
+
+func (v *OpaqueValue) Type() ValueType {
 	return ValueTypeOpaque
 }
 
-func (o *OpaqueValue) ContainedType() ValueType {
+func (v *OpaqueValue) ContainedType() ValueType {
 	return ValueTypeOpaque
 }
 
-func (o *OpaqueValue) Get() any {
-	return o.value
+func (v *OpaqueValue) Get() any {
+	return v.value
 }
 
-func (o *OpaqueValue) ToBytes() []byte {
-	return o.value
+func (v *OpaqueValue) ToBytes() []byte {
+	return v.value
 }
 
-func (o *OpaqueValue) ToString() string {
-	return string(o.value)
+func (v *OpaqueValue) ToString() string {
+	return string(v.value)
 }
 
 type ByteValue struct {
 	value byte
 }
 
-func (b *ByteValue) Type() ValueType {
+func (v *ByteValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
+}
+
+func (v *ByteValue) Type() ValueType {
 	return ValueTypeByte
 }
 
-func (b *ByteValue) ContainedType() ValueType {
+func (v *ByteValue) ContainedType() ValueType {
 	return ValueTypeByte
 }
 
-func (b *ByteValue) Get() any {
-	return b.value
+func (v *ByteValue) Get() any {
+	return v.value
 }
 
-func (b *ByteValue) ToBytes() []byte {
+func (v *ByteValue) ToBytes() []byte {
 	var ret []byte
-	return append(ret, b.value)
+	return append(ret, v.value)
 }
 
-func (b *ByteValue) ToString() string {
-	return fmt.Sprintf("0x%x", b.value)
+func (v *ByteValue) ToString() string {
+	return fmt.Sprintf("0x%x", v.value)
 }
 
 func String(v ...string) Value {

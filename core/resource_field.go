@@ -1,6 +1,10 @@
 package core
 
-import "bytes"
+import (
+	"bytes"
+	"encoding/json"
+	"strconv"
+)
 
 // Field defines the runtime
 // representation of resource.
@@ -8,14 +12,18 @@ type Field interface {
 	Class() Resource
 	InstanceID() InstanceID
 	Value
+
+	MarshalJSON() ([]byte, error)
 }
+
+var _ Field = &ResourceField{}
 
 // ResourceField implements Field.
 type ResourceField struct {
-	id     ResourceID //deprecated
-	class  Resource
-	instId InstanceID
-	value  Value
+	id         ResourceID //deprecated
+	class      Resource
+	instanceId InstanceID
+	value      Value
 }
 
 func NewResourceField(id ResourceID, value Value) *ResourceField {
@@ -25,8 +33,31 @@ func NewResourceField(id ResourceID, value Value) *ResourceField {
 	}
 }
 
+func NewResourceField2(instId InstanceID, class Resource, value Value) *ResourceField {
+	return &ResourceField{
+		id:         class.Id(),
+		class:      class,
+		instanceId: instId,
+		value:      value,
+	}
+}
+
+func (v *ResourceField) MarshalJSON() ([]byte, error) {
+	buf := []byte(`{`)
+	buf = append(buf, `"id":`+strconv.Itoa(int(v.id))...)
+	buf = append(buf, `,"instanceId":`+strconv.Itoa(int(v.instanceId))...)
+
+	data, _ := json.Marshal(v.class)
+	buf = append(buf, `,"class":`+string(data)...)
+	data, _ = v.value.MarshalJSON()
+	buf = append(buf, `,"value":`+string(data)...)
+	buf = append(buf, `}`...)
+
+	return buf, nil
+}
+
 func (v *ResourceField) InstanceID() InstanceID {
-	return v.instId
+	return v.instanceId
 }
 
 func (v *ResourceField) Class() Resource {
@@ -63,6 +94,11 @@ func NewMultipleResourceValue(id ResourceID, value []*ResourceField) Value {
 type MultipleResourceValue struct {
 	id        ResourceID
 	instances []*ResourceField
+}
+
+func (v *MultipleResourceValue) MarshalJSON() ([]byte, error) {
+	buf := v.ToString()
+	return []byte(`"` + buf + `"`), nil
 }
 
 func (v *MultipleResourceValue) ToBytes() []byte {

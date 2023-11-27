@@ -1,5 +1,7 @@
 package core
 
+import "strconv"
+
 type ResourceID = uint16
 
 // LwM2MSecurity resources
@@ -213,6 +215,8 @@ type Resource interface {
 	SetUnits(string)
 	SetRangeOrEnums(string)
 	SetDescription(string)
+
+	MarshalJSON() ([]byte, error)
 }
 
 type ResourceImpl struct {
@@ -225,6 +229,24 @@ type ResourceImpl struct {
 	units        string
 	rangeOrEnums string
 	description  string
+}
+
+func (r *ResourceImpl) MarshalJSON() ([]byte, error) {
+	buf := []byte(`{`)
+	buf = append(buf, `"id":`+strconv.Itoa(int(r.id))...)
+	buf = append(buf, `,"name":"`+r.name+`"`...)
+	buf = append(buf, `,"kind":`+strconv.Itoa(int(r.kind))...)
+	buf = append(buf, `,"operations":`+strconv.Itoa(int(r.operations))...)
+	buf = append(buf, `,"multiple":`...)
+	buf = strconv.AppendBool(buf, r.multiple)
+	buf = append(buf, `,"mandatory":`...)
+	buf = strconv.AppendBool(buf, r.mandatory)
+	buf = append(buf, `,"units":"`+r.units+`"`...)
+	buf = append(buf, `,"rangeOrEnums":"`+r.rangeOrEnums+`"`...)
+	buf = append(buf, `,"description":"`+r.description+`"`...)
+	buf = append(buf, `}`...)
+
+	return buf, nil
 }
 
 func (r *ResourceImpl) Id() ResourceID {
