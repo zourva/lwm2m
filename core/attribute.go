@@ -25,4 +25,4 @@ const (
 	MaximumHistoricalQueue  NotificationAttributeName = "hqmax" //Readable
 )
 
-type NotificationAttrs = map[string]any
+type NotificationAttrs = map[string]string

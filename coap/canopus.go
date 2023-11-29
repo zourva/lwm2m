@@ -67,6 +67,13 @@ const (
 	OptionSize1         OptionCode = 60
 )
 
+type ObserveSwitch int
+
+const (
+	ObserveOn  ObserveSwitch = 0
+	ObserveOff               = 1
+)
+
 // Code defines a valid CoAP code which
 // is comprised by Method and Response codes.
 type Code uint8
@@ -155,10 +162,15 @@ const (
 	MediaTypeApplicationSoapFastInfoSet MediaType = 49
 	MediaTypeApplicationJSON            MediaType = 50
 	MediaTypeApplicationXObitBinary     MediaType = 51
-	MediaTypeTextPlainVndOmaLwm2m       MediaType = 1541
-	MediaTypeTlvVndOmaLwm2m             MediaType = 1542
-	MediaTypeJSONVndOmaLwm2m            MediaType = 1543
-	MediaTypeOpaqueVndOmaLwm2m          MediaType = 1544
+	MediaTypeApplicationCbor            MediaType = 60
+	MediaTypeApplicationSenMLJson       MediaType = 110
+	MediaTypeApplicationSenMLCbor       MediaType = 112
+	MediaTypeApplicationSenMLEtchJson   MediaType = 320
+	MediaTypeApplicationSenMLEtchCbor   MediaType = 322
+	MediaTypeTextPlainVndOmaLwm2m       MediaType = 11541
+	MediaTypeTlvVndOmaLwm2m             MediaType = 11542
+	MediaTypeJSONVndOmaLwm2m            MediaType = 11543
+	MediaTypeVndOmaLwm2mCbor            MediaType = 11544
 )
 
 const (

@@ -50,7 +50,7 @@ func (r *Bootstrapper) Request() error {
 
 	req := r.messager.NewConRequestPlainText(coap.Post, core.BoostrapUri)
 	req.SetUriQuery("ep", r.client.name)
-	//req.SetUriQuery("pct", fmt.Sprintf("%d", coap.MediaTypeOpaqueVndOmaLwm2m))
+	//req.SetUriQuery("pct", fmt.Sprintf("%d", coap.MediaTypeVndOmaLwm2mCbor))
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send bootstrap request failed:", err)

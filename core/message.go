@@ -59,7 +59,7 @@ func (m *BaseMessager) NewConRequestPlainText(method coap.Code, uri string) coap
 }
 
 func (m *BaseMessager) NewConRequestOpaque(method coap.Code, uri string, payload []byte) coap.Request {
-	req := m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeOpaqueVndOmaLwm2m, uri)
+	req := m.NewRequest(coap.MessageConfirmable, method, coap.MediaTypeVndOmaLwm2mCbor, uri)
 	req.SetPayload(payload)
 	return req
 }

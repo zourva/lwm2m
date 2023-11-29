@@ -88,6 +88,8 @@ type Request interface {
 	SetUriQuery(k string, v string)
 	SetTimeout(to time.Duration)
 	GetTimeout() time.Duration
+
+	SetObserve(on bool)
 }
 
 // DefaultCoapRequest wraps a CoAP Message as a Request
@@ -184,4 +186,12 @@ func (c *DefaultCoapRequest) SetTimeout(t time.Duration) {
 
 func (c *DefaultCoapRequest) GetTimeout() time.Duration {
 	return c.to
+}
+
+func (c *DefaultCoapRequest) SetObserve(on bool) {
+	if on {
+		c.Message().AddOption(OptionObserve, ObserveOn)
+	} else {
+		c.Message().AddOption(OptionObserve, ObserveOff)
+	}
 }

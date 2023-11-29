@@ -151,7 +151,7 @@ func ValidCoapMediaTypeCode(mt MediaType) bool {
 		MediaTypeApplicationSoapXML, MediaTypeApplicationAtomXML, MediaTypeApplicationXmppXML, MediaTypeApplicationExi,
 		MediaTypeApplicationFastInfoSet, MediaTypeApplicationSoapFastInfoSet, MediaTypeApplicationJSON,
 		MediaTypeApplicationXObitBinary, MediaTypeTextPlainVndOmaLwm2m, MediaTypeTlvVndOmaLwm2m,
-		MediaTypeJSONVndOmaLwm2m, MediaTypeOpaqueVndOmaLwm2m:
+		MediaTypeJSONVndOmaLwm2m, MediaTypeVndOmaLwm2mCbor:
 		return true
 	}
 

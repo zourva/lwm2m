@@ -7,20 +7,6 @@ import (
 	"time"
 )
 
-type ConnState struct {
-}
-
-type ConnStatsConfig struct {
-}
-
-type VersionInfo struct {
-	//
-}
-
-type VersionInfoProvider interface {
-	VersionInfo(c core.RegisteredClient) VersionInfo
-}
-
 type PeriodicController struct {
 	*server.DefaultEventObserver
 	duration time.Duration
@@ -63,12 +49,13 @@ func (d *PeriodicController) processClient(c core.RegisteredClient) {
 	// observe all resources of connectivity monitoring object
 	err := c.Observe(core.OmaObjectConnMonitor,
 		core.NotificationAttrs{
-			core.MinimumPeriod: 5,
-			core.MaximumPeriod: 3600,
+			core.MinimumPeriod: "30",
+			core.MaximumPeriod: "3600",
 		},
 		func(notifiedData []byte) {
-
-		}, core.ConnectivityMonitoringIPAddresses)
+			//pack := senml.Decode(notifiedData, senml.JSON)
+			log.Infof("connectivity state changed for client %s: %v", c.Name(), string(notifiedData))
+		})
 	if err != nil {
 		log.Errorln("observe client connectivity monitoring failed:", err)
 		return
@@ -77,14 +64,14 @@ func (d *PeriodicController) processClient(c core.RegisteredClient) {
 	// observe all resources of connectivity statistics object
 	err = c.Observe(core.OmaObjectConnStats,
 		core.NotificationAttrs{
-			core.MinimumPeriod: 5,
-			core.MaximumPeriod: 3600,
+			core.MinimumPeriod: "30",
+			core.MaximumPeriod: "3600",
 		},
 		func(notifiedData []byte) {
-
+			log.Infof("connectivity stats changed for client %s: %v", c.Name(), string(notifiedData))
 		})
 	if err != nil {
-		log.Errorln("observe client connectivity monitoring failed:", err)
+		log.Errorln("observe client connectivity statistics failed:", err)
 		return
 	}
 

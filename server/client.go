@@ -144,7 +144,7 @@ func (c *registeredClient) CancelObservation(oid ObjectID, oiId InstanceID, rid 
 	return c.server.messager.CancelObservation(c.Address(), oid, oiId, rid, riId)
 }
 
-func (c *registeredClient) ObserveComposite(contentType coap.MediaType, reqBody []byte, h ObserveHandler) error {
+func (c *registeredClient) ObserveComposite(contentType coap.MediaType, reqBody []byte, h ObserveHandler) ([]byte, error) {
 	return c.server.messager.ObserveComposite(c.Address(), contentType, reqBody, h)
 }
 

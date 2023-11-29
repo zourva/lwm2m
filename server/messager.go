@@ -303,19 +303,57 @@ func (m *MessagerServer) BootstrapFinish(peer string) error {
 	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *MessagerServer) Observe(peer string, oid ObjectID, id InstanceID, rid ResourceID, id2 InstanceID, attrs map[string]any, h ObserveHandler) error {
-	return nil
+func (m *MessagerServer) Observe(peer string, oid ObjectID, oiId InstanceID, rid ResourceID,
+	riId InstanceID, attrs NotificationAttrs, h ObserveHandler) error {
+	uri := m.makeAccessPath(oid, oiId, rid, riId)
+	req := m.NewConRequestPlainText(coap.Get, uri)
+	req.SetObserve(true)
+	for k, v := range attrs {
+		req.SetUriQuery(k, v)
+	}
+
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("observe operation failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeContent {
+		log.Debugf("observe client %s at %s done", peer, uri)
+		return nil
+	}
+
+	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *MessagerServer) CancelObservation(address string, oid ObjectID, id InstanceID, rid ResourceID, id2 InstanceID) error {
-	return nil
+func (m *MessagerServer) CancelObservation(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error {
+	uri := m.makeAccessPath(oid, oiId, rid, riId)
+	req := m.NewConRequestPlainText(coap.Get, uri)
+	req.SetObserve(false)
+	rsp, err := m.SendRequest(peer, req)
+	if err != nil {
+		log.Errorln("cancel observation operation failed:", err)
+		return err
+	}
+
+	// check response code
+	if rsp.Message().Code == coap.CodeContent {
+		log.Debugf("cancel observation of client %s at %s done", peer, uri)
+		return nil
+	}
+
+	return GetCodeError(rsp.Message().Code)
 }
 
-func (m *MessagerServer) ObserveComposite(address string, contentType coap.MediaType, body []byte, h ObserveHandler) error {
-	return nil
+func (m *MessagerServer) ObserveComposite(peer string, t coap.MediaType, body []byte, h ObserveHandler) ([]byte, error) {
+	//if contentType == coap.MediaTypeApplicationSenMLJson {
+	//
+	//}
+	return nil, nil
 }
 
-func (m *MessagerServer) CancelObservationComposite(address string, contentType coap.MediaType, body []byte) error {
+func (m *MessagerServer) CancelObservationComposite(peer string, t coap.MediaType, body []byte) error {
 	return nil
 }
 

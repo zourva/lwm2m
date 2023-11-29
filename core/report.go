@@ -44,6 +44,8 @@ type ReportingServer interface {
 	//  path: /?pmin={minimum period}&pmax={maximum period}&epmin= {minimum evaluation period}&
 	//          epmax={maximum evaluation period}&con={0 or 1}
 	//      URI paths for resources to be observed are provided in request payload
+	//  body: Contains a list of elements to be observed provided as SenML Pack
+	//      where the records contain Base Name and/or Name Fields, but no Value fields.
 	//  code may be responded:
 	//    2.05 Content operation is completed successfully
 	//    4.00 Undetermined error occurred
@@ -52,7 +54,7 @@ type ReportingServer interface {
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
 	//    4.15 Unsupported content format The specified format is not supported
-	ObserveComposite(contentType coap.MediaType, reqBody []byte, h ObserveHandler) error
+	ObserveComposite(contentType coap.MediaType, reqBody []byte, h ObserveHandler) ([]byte, error)
 
 	// CancelObservationComposite implements Cancel ObservationComposite operation
 	//  method: FETCH with Observe option= 1
