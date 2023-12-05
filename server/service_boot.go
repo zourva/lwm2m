@@ -46,7 +46,7 @@ type BootstrapContext interface {
 	//    2.05 Content
 	//    4.00 Bad Request
 	//    4.04 Not Found
-	Discover(oid ObjectID) ([]*coap.CoreResource, error)
+	Discover(oid ObjectID) ([]*coap.CoREResource, error)
 
 	// Write implements BootstrapWrite operation
 	//  method: PUT
@@ -189,7 +189,7 @@ func (b *bootstrapContext) Read(oid ObjectID) ([]byte, error) {
 	return b.owner.server.messager.Read(b.addr, oid, NoneID, NoneID, NoneID)
 }
 
-func (b *bootstrapContext) Discover(oid ObjectID) ([]*coap.CoreResource, error) {
+func (b *bootstrapContext) Discover(oid ObjectID) ([]*coap.CoREResource, error) {
 	return b.owner.server.messager.BootstrapDiscover(b.addr, oid)
 }
 

@@ -1,170 +1,81 @@
 package coap
 
 import (
+	"bytes"
+	"github.com/plgd-dev/go-coap/v3/message"
+	"github.com/plgd-dev/go-coap/v3/mux"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 )
 
-// NewRequest creates a new coap Request
-func NewRequest(t uint8, methodCode Code, id uint16) Request {
-	msg := NewMessage(t, methodCode, id)
-	msg.Token = []byte(GenerateToken(8))
-
-	return &DefaultCoapRequest{
-		msg: msg,
-	}
-}
-
-func NewConfirmableGetRequest() Request {
-	msg := NewMessage(MessageConfirmable, Get, GenerateMessageID())
-	msg.Token = []byte(GenerateToken(8))
-
-	return &DefaultCoapRequest{
-		msg: msg,
-	}
-}
-
-func NewConfirmablePostRequest() Request {
-	msg := NewMessage(MessageConfirmable, Post, GenerateMessageID())
-	msg.Token = []byte(GenerateToken(8))
-
-	return &DefaultCoapRequest{
-		msg: msg,
-	}
-}
-
-func NewConfirmablePutRequest() Request {
-	msg := NewMessage(MessageConfirmable, Put, GenerateMessageID())
-	msg.Token = []byte(GenerateToken(8))
-
-	return &DefaultCoapRequest{
-		msg: msg,
-	}
-}
-
-func NewConfirmableDeleteRequest() Request {
-	msg := NewMessage(MessageConfirmable, Delete, GenerateMessageID())
-	msg.Token = []byte(GenerateToken(8))
-
-	return &DefaultCoapRequest{
-		msg: msg,
-	}
-}
-
-// NewRequestFromMessage creates a new request messages from a CoAP Message.
-func NewRequestFromMessage(msg *Message) Request {
-	return &DefaultCoapRequest{
-		msg: msg,
-	}
-}
-
-func NewClientRequestFromMessage(msg *Message, attrs map[string]string, conn *net.UDPConn, addr *net.UDPAddr) Request {
-	return &DefaultCoapRequest{
-		msg:   msg,
-		attrs: attrs,
-		conn:  conn,
-		addr:  addr,
-	}
-}
-
 type Request interface {
-	Conn() *net.UDPConn
-	Address() *net.UDPAddr
-	Attributes() map[string]string
-	Attribute(o string) string
-	AttributeAsInt(o string) int
-	Message() *Message
-	UriQuery(q string) string
+	Address() net.Addr
+	SetAddress(addr net.Addr)
 
-	SetProxyUri(uri string)
-	SetMediaType(mt MediaType)
-	SetPayload([]byte)
-	SetStringPayload(s string)
-	SetRequestUri(uri string)
-	SetConfirmable(con bool)
-	SetToken(t string)
-	SetUriQuery(k string, v string)
+	Query(q string) string
+	AddQuery(k string, v string)
+
+	// Attribute returns attributes extracted
+	// from location path with keyed pattern.
+	Attribute(key string) string
+
+	// Path returns uri of the request.
+	Path() string
+
+	Body() []byte
+	SetBody([]byte)
+	IsCoRELinkContent() bool
+
+	// Timeout returns duration to elapse
+	// before make the request timeout.
+	Timeout() time.Duration
 	SetTimeout(to time.Duration)
-	GetTimeout() time.Duration
 
+	// Length returns body length.
+	Length() int64
+	Options() Options
+	ContentFormat() MediaType
 	SetObserve(on bool)
+
+	message() *Message
 }
 
-// DefaultCoapRequest wraps a CoAP Message as a Request
-// Provides various methods which proxies the Message object methods
-type DefaultCoapRequest struct {
-	msg    *Message
-	attrs  map[string]string
-	conn   *net.UDPConn
-	addr   *net.UDPAddr
-	server *Server
-	to     time.Duration
-}
-
-func (c *DefaultCoapRequest) SetProxyUri(uri string) {
-	c.msg.AddOption(OptionProxyURI, uri)
-}
-
-func (c *DefaultCoapRequest) SetMediaType(mt MediaType) {
-	c.msg.AddOption(OptionContentFormat, mt)
-}
-
-func (c *DefaultCoapRequest) Conn() *net.UDPConn {
-	return c.conn
-}
-
-func (c *DefaultCoapRequest) Address() *net.UDPAddr {
-	return c.addr
-}
-
-func (c *DefaultCoapRequest) Attributes() map[string]string {
-	return c.attrs
-}
-
-func (c *DefaultCoapRequest) Attribute(o string) string {
-	return c.attrs[o]
-}
-
-func (c *DefaultCoapRequest) AttributeAsInt(o string) int {
-	attr := c.Attribute(o)
-	i, _ := strconv.Atoi(attr)
-
-	return i
-}
-
-func (c *DefaultCoapRequest) Message() *Message {
-	return c.msg
-}
-
-func (c *DefaultCoapRequest) SetStringPayload(s string) {
-	c.msg.Payload = NewPlainTextPayload(s)
-}
-
-func (c *DefaultCoapRequest) SetPayload(b []byte) {
-	c.msg.Payload = NewBytesPayload(b)
-}
-
-func (c *DefaultCoapRequest) SetRequestUri(uri string) {
-	c.msg.AddOptions(NewPathOptions(uri))
-}
-
-func (c *DefaultCoapRequest) SetConfirmable(con bool) {
-	if con {
-		c.msg.Type = MessageConfirmable
-	} else {
-		c.msg.Type = MessageNonConfirmable
+func NewRequest(msg *mux.Message) Request {
+	req := &request{
+		msg:     msg,
+		body:    nil,
+		timeout: DefaultTimeout,
 	}
+
+	if msg != nil {
+		req.body, _ = msg.ReadBody()
+	}
+
+	return req
 }
 
-func (c *DefaultCoapRequest) SetToken(t string) {
-	c.msg.Token = []byte(t)
+type request struct {
+	addr    net.Addr
+	msg     *Message
+	body    []byte
+	timeout time.Duration
 }
 
-func (c *DefaultCoapRequest) UriQuery(q string) string {
-	qs := c.Message().GetOptionsAsString(OptionURIQuery)
+func (r *request) message() *Message {
+	return r.msg
+}
 
+func (r *request) Address() net.Addr {
+	return r.addr
+}
+
+func (r *request) SetAddress(addr net.Addr) {
+	r.addr = addr
+}
+
+func (r *request) Query(q string) string {
+	qs, _ := r.msg.Queries()
 	for _, o := range qs {
 		ps := strings.Split(o, "=")
 		if len(ps) == 2 {
@@ -173,25 +84,65 @@ func (c *DefaultCoapRequest) UriQuery(q string) string {
 			}
 		}
 	}
+
 	return ""
 }
 
-func (c *DefaultCoapRequest) SetUriQuery(k string, v string) {
-	c.Message().AddOption(OptionURIQuery, k+"="+v)
+func (r *request) AddQuery(k string, v string) {
+	r.msg.AddQuery(k + "=" + v)
 }
 
-func (c *DefaultCoapRequest) SetTimeout(t time.Duration) {
-	c.to = t
+func (r *request) Attribute(o string) string {
+	return r.msg.RouteParams.Vars[o]
 }
 
-func (c *DefaultCoapRequest) GetTimeout() time.Duration {
-	return c.to
+func (r *request) Body() []byte {
+	return r.body
 }
 
-func (c *DefaultCoapRequest) SetObserve(on bool) {
+func (r *request) SetBody(b []byte) {
+	r.msg.SetBody(bytes.NewReader(b))
+}
+
+func (r *request) SetObserve(on bool) {
 	if on {
-		c.Message().AddOption(OptionObserve, ObserveOn)
+		r.msg.SetObserve(0)
 	} else {
-		c.Message().AddOption(OptionObserve, ObserveOff)
+		r.msg.SetObserve(1)
 	}
+}
+
+func (r *request) Timeout() time.Duration {
+	return r.timeout
+}
+
+func (r *request) SetTimeout(to time.Duration) {
+	r.timeout = to
+}
+
+func (r *request) Path() string {
+	path, _ := r.msg.Path()
+	return path
+}
+
+func (r *request) Length() int64 {
+	size, _ := r.msg.BodySize()
+	return size
+}
+
+func (r *request) Options() Options {
+	return r.msg.Options()
+}
+
+func (r *request) ContentFormat() MediaType {
+	m, _ := r.Options().ContentFormat()
+	return m
+}
+
+func (r *request) IsCoRELinkContent() bool {
+	return r.ContentFormat() == message.AppLinkFormat
+}
+
+func (r *request) SetContentFormat(mt MediaType) {
+	r.msg.SetContentFormat(mt)
 }

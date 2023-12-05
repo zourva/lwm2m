@@ -119,7 +119,7 @@ func (c *registeredClient) Execute(oid ObjectID, oiId InstanceID, rid ResourceID
 	return c.server.messager.Execute(c.Address(), oid, oiId, rid, args)
 }
 
-func (c *registeredClient) Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoreResource, error) {
+func (c *registeredClient) Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoREResource, error) {
 	return c.server.messager.Discover(c.Address(), oid, oiId, rid, depth)
 }
 
@@ -175,7 +175,7 @@ func (c *registeredClient) makeAccessPath(oid ObjectID, oiId InstanceID, rid Res
 //	</lwm2m /2/4>,</lwm2m /3/0>,</lwm2m /4/0>,</lwm2m /5>
 //	or
 //	</>;ct=110, </1/0>,</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,</3/0>,</4/0>,</5>
-func (c *registeredClient) createObjects(objInstances []*coap.CoreResource) {
+func (c *registeredClient) createObjects(objInstances []*coap.CoREResource) {
 	for _, o := range objInstances {
 		t := o.Target[1:len(o.Target)]
 

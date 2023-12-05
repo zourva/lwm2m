@@ -59,7 +59,7 @@ type RegistrationInfo struct {
 
 	// mandatory objects and instances, excluding
 	// object 0, 21, and 23, CoRE-Link format.
-	ObjectInstances []*coap.CoreResource `msgpack:"objectInstances"`
+	ObjectInstances []*coap.CoREResource `msgpack:"objectInstances"`
 
 	Location       string    `msgpack:"location"`       //temporary id
 	RegisterTime   time.Time `msgpack:"registerTime"`   //register operation time

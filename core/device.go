@@ -13,7 +13,7 @@ type DeviceControlServer interface {
 	Write(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) error
 	Delete(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID) error
 	Execute(oid ObjectID, oiId InstanceID, rid ResourceID, args string) error
-	Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoreResource, error)
+	Discover(oid ObjectID, oiId InstanceID, rid ResourceID, depth int) ([]*coap.CoREResource, error)
 	//ReadComposite()
 	//WriteComposite()
 	//WriteAttributes()

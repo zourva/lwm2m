@@ -1,83 +1,69 @@
 package coap
 
-import "strings"
-
-func NoResponse() Response {
-	return NilResponse{}
-}
+import "github.com/plgd-dev/go-coap/v3/message/pool"
 
 type Response interface {
-	Message() *Message
-	Error() error
-	Payload() []byte
-	UriQuery(q string) string
+	// Code returns response code
+	Code() Code
+	Body() []byte
+
+	// Length returns body length.
+	Length() int64
+
+	// LocationPath returns option result of LocationPath.
+	LocationPath() string
+	SetLocationPath(s string)
+
+	message() *Message
 }
 
-type NilResponse struct {
-}
-
-func (c NilResponse) Message() *Message {
-	return nil
-}
-
-func (c NilResponse) Error() error {
-	return nil
-}
-
-func (c NilResponse) Payload() []byte {
-	return nil
-}
-
-func (c NilResponse) UriQuery(q string) string {
-	return ""
-}
-
-// NewResponse creates a new Response object with a Message object and any error messages
-func NewResponse(msg *Message, err error) Response {
-	resp := &DefaultResponse{
-		msg: msg,
-		err: err,
+func NewResponse(msg *pool.Message) Response {
+	rsp := &response{
+		msg: &Message{
+			Message:     msg,
+			RouteParams: nil,
+		},
+		body: nil,
 	}
 
-	return resp
-}
-
-// NewResponseWithMessage creates a new response object with a Message object
-func NewResponseWithMessage(msg *Message) Response {
-	resp := &DefaultResponse{
-		msg: msg,
+	if msg != nil {
+		rsp.body, _ = msg.ReadBody()
 	}
 
-	return resp
+	return rsp
 }
 
-type DefaultResponse struct {
-	msg *Message
-	err error
+type response struct {
+	msg  *Message
+	body []byte
 }
 
-func (c *DefaultResponse) Message() *Message {
-	return c.msg
+func (r *response) Code() Code {
+	return Code(r.msg.Code())
 }
 
-func (c *DefaultResponse) Error() error {
-	return c.err
+func (r *response) message() *Message {
+	return r.msg
 }
 
-func (c *DefaultResponse) Payload() []byte {
-	return c.Message().Payload.GetBytes()
+func (r *response) Body() []byte {
+	return r.body
 }
 
-func (c *DefaultResponse) UriQuery(q string) string {
-	qs := c.Message().GetOptionsAsString(OptionURIQuery)
+func (r *response) Length() int64 {
+	size, _ := r.msg.BodySize()
+	return size
+}
 
-	for _, o := range qs {
-		ps := strings.Split(o, "=")
-		if len(ps) == 2 {
-			if ps[0] == q {
-				return ps[1]
-			}
-		}
+func (r *response) LocationPath() string {
+	p, _ := r.msg.Options().LocationPath()
+	return p
+}
+
+func (r *response) SetLocationPath(s string) {
+	var buf []byte
+	_, _, err := r.msg.Options().SetLocationPath(buf, s)
+	if err != nil {
+		return
 	}
-	return ""
 }

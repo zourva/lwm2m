@@ -16,7 +16,7 @@ import (
 // reporter has no standalone loop embedded.
 type Reporter struct {
 	client   *LwM2MClient
-	messager core.Messager
+	messager coap.Client
 
 	observer *Observer
 
@@ -68,7 +68,7 @@ func (r *Reporter) Notify(observationId string, value []byte) error {
 }
 
 func (r *Reporter) Send(value []byte) ([]byte, error) {
-	req := r.messager.NewConRequestOpaque(coap.Post, core.SendReportUri, value)
+	req := r.messager.NewPostRequestOpaque(core.SendReportUri, value)
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		r.incrementFailCounter()
@@ -77,13 +77,13 @@ func (r *Reporter) Send(value []byte) ([]byte, error) {
 	}
 
 	// check response code
-	if rsp.Message().Code == coap.CodeChanged {
+	if rsp.Code().Changed() {
 		r.resetFailCounter()
 		log.Traceln("send opaque request done")
-		return rsp.Payload(), nil
+		return rsp.Body(), nil
 	}
 
-	return nil, errors.New(coap.CodeString(rsp.Message().Code))
+	return nil, errors.New(rsp.Code().String())
 }
 
 func (r *Reporter) FailureCounter() int32 {

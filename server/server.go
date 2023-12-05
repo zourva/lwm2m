@@ -2,7 +2,6 @@ package server
 
 import (
 	log "github.com/sirupsen/logrus"
-	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 )
 
@@ -21,7 +20,7 @@ func New(name string, opts ...Option) *LwM2MServer {
 	}
 
 	s.makeDefaults()
-	s.coapConn = coap.NewCoapServer(name, s.address)
+	//s.coapConn = coap.NewServer(name, s.address)
 	s.stats = NewStatistics()
 	s.manager = NewRegisteredClientManager(s)
 	s.bootstrapDelegator = NewBootstrapServerDelegator(s)
@@ -62,7 +61,7 @@ type LwM2MServer struct {
 	//controlService   DeviceControlService
 
 	// session layer
-	coapConn coap.Server
+	//coapConn coap.Server
 	messager *MessagerServer
 	stats    *Statistics
 }

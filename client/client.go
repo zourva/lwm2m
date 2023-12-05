@@ -45,7 +45,7 @@ type LwM2MClient struct {
 	// loaded from local persistent storage.
 	store ObjectInstanceStore
 
-	coapConn coap.Server
+	//coapConn coap.Client
 	messager *MessagerClient // messager to communicate with server
 
 	// lifecycle event manager
@@ -64,12 +64,6 @@ type LwM2MClient struct {
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
-	c.coapConn = coap.NewServer(
-		c.name,
-		c.options.localAddress,
-		c.options.serverAddress[0],
-		c.options.sendTimeout,
-		c.options.recvTimeout)
 	c.messager = NewMessager(c)
 	//c.bootstrapper = NewBootstrapper(c)
 	//c.registrar = NewRegistrar(c)

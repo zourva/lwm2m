@@ -27,7 +27,7 @@ type Bootstrapper struct {
 	*meta.StateMachine[state]
 
 	client   *LwM2MClient
-	messager core.Messager
+	messager coap.Client
 
 	// TODO: get from bootstrap info
 	lastAttempt time.Time
@@ -48,9 +48,9 @@ type Bootstrapper struct {
 func (r *Bootstrapper) Request() error {
 	//r.setState(bsBootstrapping)
 
-	req := r.messager.NewConRequestPlainText(coap.Post, core.BoostrapUri)
-	req.SetUriQuery("ep", r.client.name)
-	//req.SetUriQuery("pct", fmt.Sprintf("%d", coap.MediaTypeVndOmaLwm2mCbor))
+	req := r.messager.NewPostRequestPlain(core.BoostrapUri, nil)
+	req.AddQuery("ep", r.client.name)
+	//req.AddQuery("pct", fmt.Sprintf("%d", coap.MediaTypeVndOmaLwm2mCbor))
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("send bootstrap request failed:", err)
@@ -58,12 +58,12 @@ func (r *Bootstrapper) Request() error {
 	}
 
 	//check response code
-	if rsp.Message().Code == coap.CodeChanged {
+	if rsp.Code().Changed() {
 		log.Infoln("bootstrap request accepted, progressing")
 		return nil
 	}
 
-	return errors.New(rsp.Message().GetCodeString())
+	return errors.New(rsp.Code().String())
 }
 
 // PackRequest implements BootstrapPackRequest operation
@@ -80,8 +80,8 @@ func (r *Bootstrapper) Request() error {
 //	 4.06 Not Acceptable The specified Content-Format is not supported
 //	 5.01 Not Implemented The operation is not implemented.
 func (r *Bootstrapper) PackRequest() error {
-	req := r.messager.NewConRequestPlainText(coap.Get, core.BootstrapPackUri)
-	req.SetUriQuery("ep", r.client.name)
+	req := r.messager.NewGetRequestPlain(core.BootstrapPackUri)
+	req.AddQuery("ep", r.client.name)
 	rsp, err := r.messager.Send(req)
 	if err != nil {
 		log.Errorln("bootstrap pack request failed:", err)
@@ -89,11 +89,10 @@ func (r *Bootstrapper) PackRequest() error {
 	}
 
 	//check response code
-	msg := rsp.Message()
-	if msg.Code == coap.CodeContent {
-		log.Infof("bootstrap pack request done with %d bytes response", len(rsp.Payload()))
+	if rsp.Code().Content() {
+		log.Infof("bootstrap pack request done with %d bytes response", rsp.Length())
 
-		objs, err := core.ParseObjectInstancesWithJSON(r.client.store.ObjectRegistry(), msg.Payload.String())
+		objs, err := core.ParseObjectInstancesWithJSON(r.client.store.ObjectRegistry(), string(rsp.Body()))
 		if err != nil {
 			log.Errorf("bootstrap pack parse object failed")
 			return fmt.Errorf("parse failed")
@@ -109,7 +108,7 @@ func (r *Bootstrapper) PackRequest() error {
 		return nil
 	}
 
-	return errors.New(coap.CodeString(msg.Code))
+	return errors.New(rsp.Code().String())
 }
 
 func (r *Bootstrapper) OnRead() (*core.ResourceField, error) {

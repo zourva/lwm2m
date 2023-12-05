@@ -6,8 +6,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
-	"github.com/zourva/lwm2m/endec"
 	"github.com/zourva/lwm2m/utils"
+	"strconv"
 )
 
 type connState = int
@@ -21,10 +21,11 @@ const (
 )
 
 type MessagerClient struct {
-	*BaseMessager
-	client *LwM2MClient
-	state  connState
-	mute   bool
+	coap.Client
+	lwM2MClient *LwM2MClient
+
+	state connState
+	mute  bool
 
 	// service layer delegator
 	deviceCtrlDelegator DeviceControlClient
@@ -34,9 +35,10 @@ type MessagerClient struct {
 
 func NewMessager(c *LwM2MClient) *MessagerClient {
 	m := &MessagerClient{
-		mute:   false,
-		state:  disconnected,
-		client: c,
+		Client:      coap.NewClient(c.options.serverAddress[0]),
+		mute:        false,
+		state:       disconnected,
+		lwM2MClient: c,
 	}
 
 	m.deviceCtrlDelegator = c.controller
@@ -47,50 +49,46 @@ func NewMessager(c *LwM2MClient) *MessagerClient {
 }
 
 func (m *MessagerClient) Start() {
-	s := m.conn()
-
-	// add a callback to trigger auto registration
-	// procedure when transport layer started.
-	s.OnStart(func(server coap.Server) {
-		m.state = connected
-		log.Infoln("lwm2m client connected")
-	})
-
-	s.OnObserve(func(observationId string, msg *coap.Message) {
-		log.Infoln("observe request received for", observationId)
-		// TODO: extract attributes
-		m.reporterDelegator.OnObserve(observationId, nil)
-	})
-
-	s.OnObserveCancel(func(observationId string, msg *coap.Message) {
-		log.Infoln("observe request received for", observationId)
-		m.reporterDelegator.OnCancelObservation(observationId)
-	})
-
-	s.OnError(func(err error) {
-		log.Errorln("err received:", err)
-	})
+	//s := m.conn()
+	//// add a callback to trigger auto registration
+	//// procedure when transport layer started.
+	//s.OnStart(func(server coap.Server) {
+	//	m.state = connected
+	//	log.Infoln("lwm2m client connected")
+	//})
+	//
+	//s.OnObserve(func(observationId string, msg *coap.Message) {
+	//	log.Infoln("observe request received for", observationId)
+	//	// TODO: extract attributes
+	//	m.reporterDelegator.OnObserve(observationId, nil)
+	//})
+	//
+	//s.OnObserveCancel(func(observationId string, msg *coap.Message) {
+	//	log.Infoln("observe request received for", observationId)
+	//	m.reporterDelegator.OnCancelObservation(observationId)
+	//})
+	//
+	//s.OnError(func(err error) {
+	//	log.Errorln("err received:", err)
+	//})
 
 	// for device control interface methods
-	s.Get("/:oid/:oiid/:rid/:riid", m.onServerRead)
-	s.Get("/:oid/:oiid/:rid", m.onServerRead)
-	s.Get("/:oid/:oiid", m.onServerRead)
-	s.Get("/:oid", m.onServerRead)
+	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerRead)
+	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerRead)
+	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerRead)
+	m.Get("/{oid:[0-9]+}", m.onServerRead)
 
-	s.Put("/:oid/:oiid/:rid/:riid", m.onServerWrite)
-	s.Put("/:oid/:oiid/:rid", m.onServerWrite)
-	s.Put("/:oid/:oiid", m.onServerWrite)
+	m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerWrite)
+	m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerWrite)
+	m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerWrite)
 
-	s.Delete("/:oid/:oiid/:rid/:riid", m.onServerDelete)
-	s.Delete("/:oid/:oiid", m.onServerDelete)
+	m.Delete("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerDelete)
+	m.Delete("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerDelete)
 
-	s.Post("/:oid/:oiid/:rid", m.onServerExecute)
-	s.Post("/:oid", m.onServerCreate)
+	m.Post("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerExecute)
+	m.Post("/{oid:[0-9]+}", m.onServerCreate)
 
-	s.Post("/bs", m.onBootstrapFinish)
-
-	// this method does not hold
-	s.Start()
+	m.Post("/bs", m.onBootstrapFinish)
 }
 
 // PauseUserPlane stops accepting requests from servers.
@@ -107,10 +105,6 @@ func (m *MessagerClient) muted() bool {
 	return m.mute
 }
 
-func (m *MessagerClient) conn() coap.Server {
-	return m.client.coapConn
-}
-
 func (m *MessagerClient) bootstrapper() BootstrapClient {
 	return m.bootstrapDelegator
 }
@@ -120,8 +114,9 @@ func (m *MessagerClient) devController() DeviceControlClient {
 }
 
 func (m *MessagerClient) getOID(req coap.Request) ObjectID {
-	objectId := req.AttributeAsInt("oid")
-	return ObjectID(objectId)
+	objectId := req.Attribute("oid")
+	oid, _ := strconv.Atoi(objectId)
+	return ObjectID(oid)
 }
 
 // if not provided, return NoneID
@@ -130,7 +125,8 @@ func (m *MessagerClient) getOIID(req coap.Request) InstanceID {
 
 	instance := req.Attribute("oiid")
 	if instance != "" {
-		instanceId = InstanceID(req.AttributeAsInt("oiid"))
+		oiId, _ := strconv.Atoi(instance)
+		instanceId = InstanceID(oiId)
 	}
 
 	return instanceId
@@ -142,7 +138,8 @@ func (m *MessagerClient) getRID(req coap.Request) ResourceID {
 
 	resource := req.Attribute("rid")
 	if resource != "" {
-		resourceId = ResourceID(req.AttributeAsInt("rid"))
+		rid, _ := strconv.Atoi(resource)
+		resourceId = ResourceID(rid)
 	}
 
 	return resourceId
@@ -154,18 +151,11 @@ func (m *MessagerClient) getRIId(req coap.Request) InstanceID {
 
 	instance := req.Attribute("riid")
 	if instance != "" {
-		instanceId = InstanceID(req.AttributeAsInt("riid"))
+		riId, _ := strconv.Atoi(instance)
+		instanceId = InstanceID(riId)
 	}
 
 	return instanceId
-}
-
-func (m *MessagerClient) getMediaTypeFromValue(v Value) coap.MediaType {
-	if v.Type() == ValueTypeMultiple {
-		return coap.MediaTypeTlvVndOmaLwm2m
-	} else {
-		return coap.MediaTypeTextPlain
-	}
 }
 
 ////// bootstrap procedure handlers
@@ -191,43 +181,36 @@ func (m *MessagerClient) onBootstrapFinish(req coap.Request) coap.Response {
 
 	err := m.bootstrapper().OnFinish()
 
-	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
+	return m.NewAckResponse(req, GetErrorCode(err))
 }
 
 ////// device management and service enablement handlers
 
 func (m *MessagerClient) onServerCreate(req coap.Request) coap.Response {
-	log.Debugln("receive create request:", req.Message().GetURIPath())
+	log.Debugln("receive create request:", req.Path())
 
 	objectId := m.getOID(req)
 	err := m.devController().OnCreate(objectId, String(""))
 
-	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
+	return m.NewAckResponse(req, GetErrorCode(err))
 }
 
 func (m *MessagerClient) onServerRead(req coap.Request) coap.Response {
-	log.Debugln("receive read request:", req.Message().GetURIPath())
+	log.Debugln("receive read request:", req.Path())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
 	rid := m.getRID(req)
 	riId := m.getRIId(req)
 
-	var payload coap.Payload
 	value, err := m.devController().OnRead(oid, oiId, rid, riId)
-	if err == ErrorNone {
-		buf := endec.EncodeValue(rid, value.Class().Multiple(), value)
-		payload = coap.NewBytesPayload(buf)
-	}
-
-	rsp := m.NewPiggybackedResponse(req, GetErrorCode(err), payload)
-	rsp.Message().AddOption(coap.OptionContentFormat, m.getMediaTypeFromValue(value))
+	rsp := m.NewAckPiggybackedResponse(req, GetErrorCode(err), value.ToBytes())
 
 	return rsp
 }
 
 func (m *MessagerClient) onServerDelete(req coap.Request) coap.Response {
-	log.Debugln("receive delete request:", req.Message().GetURIPath())
+	log.Debugln("receive delete request:", req.Path())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -236,15 +219,15 @@ func (m *MessagerClient) onServerDelete(req coap.Request) coap.Response {
 
 	err := m.devController().OnDelete(oid, oiId, rid, riId)
 
-	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
+	return m.NewAckResponse(req, GetErrorCode(err))
 }
 
 func (m *MessagerClient) onServerDiscover(req coap.Request) {
-	log.Debugln("receive discover request:", req.Message().GetURIPath())
+	log.Debugln("receive discover request:", req.Path())
 }
 
 func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
-	log.Debugln("receive write request:", req.Message().GetURIPath())
+	log.Debugln("receive write request:", req.Path())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -253,11 +236,11 @@ func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
 
 	err := m.devController().OnWrite(oid, oiId, rid, riId, String(""))
 
-	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
+	return m.NewAckResponse(req, GetErrorCode(err))
 }
 
 func (m *MessagerClient) onServerExecute(req coap.Request) coap.Response {
-	log.Debugln("receive execute request:", req.Message().GetURIPath())
+	log.Debugln("receive execute request:", req.Path())
 
 	oid := m.getOID(req)
 	oiId := m.getOIID(req)
@@ -265,25 +248,11 @@ func (m *MessagerClient) onServerExecute(req coap.Request) coap.Response {
 
 	err := m.devController().OnExecute(oid, oiId, rid, "")
 
-	return m.NewPiggybackedResponse(req, GetErrorCode(err), coap.NewEmptyPayload())
+	return m.NewAckResponse(req, GetErrorCode(err))
 }
 
 func (m *MessagerClient) onServerObserve() {
 	log.Println("Observe Request")
-}
-
-func (m *MessagerClient) Send(req coap.Request) (coap.Response, error) {
-	rsp, err := m.conn().Send(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return rsp, nil
-}
-
-func (m *MessagerClient) Notify(observationId string, data []byte) error {
-	m.conn().NotifyChange(observationId, string(data), false)
-	return nil
 }
 
 func (m *MessagerClient) Connected() bool {
@@ -292,12 +261,11 @@ func (m *MessagerClient) Connected() bool {
 
 func (m *MessagerClient) Register(info *regInfo) error {
 	// send request
-	req := m.NewConRequestCoRELink(coap.Post, RegisterUri)
-	req.SetUriQuery("ep", info.name)
-	req.SetUriQuery("lt", utils.IntToStr(info.lifetime))
-	req.SetUriQuery("lwm2m", lwM2MVersion)
-	req.SetUriQuery("b", info.mode)
-	req.SetStringPayload(info.objects)
+	req := m.NewPostRequestCoReLink(RegisterUri, []byte(info.objects))
+	req.AddQuery("ep", info.name)
+	req.AddQuery("lt", utils.IntToStr(info.lifetime))
+	req.AddQuery("lwm2m", lwM2MVersion)
+	req.AddQuery("b", info.mode)
 
 	log.Infof("send register(%s) request...", info.name)
 	rsp, err := m.Send(req)
@@ -307,27 +275,27 @@ func (m *MessagerClient) Register(info *regInfo) error {
 	}
 
 	// check response code
-	if rsp.Message().Code == coap.CodeCreated {
+	if rsp.Code().Created() {
 		// save location for update or de-register operation
-		info.location = rsp.Message().GetLocationPath()
+		info.location = rsp.LocationPath()
 		log.Infof("register(%s) done with assigned location:%s", info.name, info.location)
 		return nil
 	}
 
-	log.Errorf("register(%s) request failed:%s", info.name, coap.CodeString(rsp.Message().Code))
+	log.Errorf("register(%s) request failed:%s", info.name, rsp.Code().String())
 
-	return errors.New(rsp.Message().GetCodeString())
+	return errors.New(rsp.Code().String())
 }
 
 func (m *MessagerClient) Update(info *regInfo, params ...string) error {
 	uri := RegisterUri + fmt.Sprintf("/%s", info.location)
-	req := m.NewConRequestCoRELink(coap.Post, uri)
+	req := m.NewPostRequestCoReLink(uri, nil)
 
 	for _, param := range params {
 		if param == "lt" {
-			req.SetUriQuery("lt", utils.IntToStr(info.lifetime))
+			req.AddQuery("lt", utils.IntToStr(info.lifetime))
 		} else if param == "objlink" {
-			req.SetStringPayload(info.objects)
+			req.SetBody([]byte(info.objects))
 		}
 	}
 
@@ -338,19 +306,19 @@ func (m *MessagerClient) Update(info *regInfo, params ...string) error {
 	}
 
 	// check response code
-	if rsp.Message().Code == coap.CodeChanged {
+	if rsp.Code().Changed() {
 		log.Infoln("update done on", uri)
 		return nil
 	}
 
-	log.Errorln("update request failed:", coap.CodeString(rsp.Message().Code))
+	log.Errorln("update request failed:", rsp.Code().String())
 
-	return errors.New(coap.CodeString(rsp.Message().Code))
+	return errors.New(rsp.Code().String())
 }
 
 func (m *MessagerClient) Deregister(info *regInfo) error {
 	uri := RegisterUri + fmt.Sprintf("/%s", info.location)
-	req := m.NewConRequestCoRELink(coap.Delete, uri)
+	req := m.NewDeleteRequestPlain(uri)
 	rsp, err := m.Send(req)
 	if err != nil {
 		log.Errorln("send de-register request failed:", err)
@@ -358,12 +326,12 @@ func (m *MessagerClient) Deregister(info *regInfo) error {
 	}
 
 	// check response code
-	if rsp.Message().Code == coap.CodeDeleted {
+	if rsp.Code().Deleted() {
 		log.Infoln("deregister done on", uri)
 		return nil
 	}
 
-	log.Errorln("de-register request failed:", coap.CodeString(rsp.Message().Code))
+	log.Errorln("de-register request failed:", rsp.Code().String())
 
-	return errors.New(coap.CodeString(rsp.Message().Code))
+	return errors.New(rsp.Code().String())
 }
