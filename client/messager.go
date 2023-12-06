@@ -35,7 +35,7 @@ type MessagerClient struct {
 
 func NewMessager(c *LwM2MClient) *MessagerClient {
 	m := &MessagerClient{
-		Client:      coap.NewClient(c.options.serverAddress[0]),
+		Client:      coap.NewClient(c.options.serverAddress[0], coap.WithDTLSConfig(c.options.dtlsConf)),
 		mute:        false,
 		state:       disconnected,
 		lwM2MClient: c,

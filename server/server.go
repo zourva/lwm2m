@@ -1,6 +1,7 @@
 package server
 
 import (
+	piondtls "github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 	. "github.com/zourva/lwm2m/core"
 )
@@ -44,6 +45,7 @@ type LwM2MServer struct {
 	registry ObjectRegistry
 	store    RegInfoStore
 	provider GuidProvider
+	dtlsConf *piondtls.Config
 
 	observer RegisteredClientObserver
 	manager  RegisteredClientManager
@@ -134,4 +136,5 @@ func (s *LwM2MServer) makeDefaults() {
 	if s.provider == nil {
 		s.provider = NewUrnUuidProvider()
 	}
+
 }

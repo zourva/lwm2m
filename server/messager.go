@@ -25,7 +25,7 @@ type MessagerServer struct {
 
 func NewMessager(s *LwM2MServer) *MessagerServer {
 	m := &MessagerServer{
-		Server:      coap.NewServer(s.network, s.address),
+		Server:      coap.NewServer(s.network, s.address, coap.WithDTLSConfig(s.dtlsConf)),
 		lwM2MServer: s,
 		network:     s.network,
 		address:     s.address,

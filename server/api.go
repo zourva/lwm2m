@@ -1,6 +1,7 @@
 package server
 
 import (
+	piondtls "github.com/pion/dtls/v2"
 	"github.com/zourva/lwm2m/core"
 )
 
@@ -53,8 +54,9 @@ type DeviceControlService interface {
 
 type Option func(s *LwM2MServer)
 
-func WithBindingAddress(addr string) Option {
+func WithBindingAddress(network, addr string) Option {
 	return func(s *LwM2MServer) {
+		s.network = network
 		s.address = addr
 	}
 }
@@ -80,5 +82,11 @@ func WithRegistrationInfoStore(store RegInfoStore) Option {
 func WithObjectClassRegistry(registry core.ObjectRegistry) Option {
 	return func(s *LwM2MServer) {
 		s.registry = registry
+	}
+}
+
+func WithDTLSConfig(conf *piondtls.Config) Option {
+	return func(s *LwM2MServer) {
+		s.dtlsConf = conf
 	}
 }

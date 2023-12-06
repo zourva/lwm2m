@@ -1,6 +1,7 @@
 package client
 
 import (
+	piondtls "github.com/pion/dtls/v2"
 	"github.com/zourva/lwm2m/core"
 	"strings"
 	"time"
@@ -44,6 +45,11 @@ type Options struct {
 	// request timeout
 	sendTimeout time.Duration
 	recvTimeout time.Duration
+
+	// dtlsConf
+	// - nil  : disable dtls
+	// - !nil : enable dtls
+	dtlsConf *piondtls.Config
 }
 
 type Option func(*Options)
@@ -81,6 +87,12 @@ func WithServerSendTimeout(timeout time.Duration) Option {
 func WithServerRecvTimeout(timeout time.Duration) Option {
 	return func(s *Options) {
 		s.recvTimeout = timeout
+	}
+}
+
+func WithDTLSConfig(conf *piondtls.Config) Option {
+	return func(s *Options) {
+		s.dtlsConf = conf
 	}
 }
 

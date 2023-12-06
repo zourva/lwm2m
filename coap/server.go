@@ -2,7 +2,6 @@ package coap
 
 import (
 	"context"
-	piondtls "github.com/pion/dtls/v2"
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/dtls/server"
 	coapnet "github.com/plgd-dev/go-coap/v3/net"
@@ -38,7 +37,7 @@ type coapServer struct {
 	conns sync.Map
 }
 
-func NewServer(network, addr string) Server {
+func NewServer(network, addr string, opts ...PeerOption) Server {
 	r := NewRouter()
 	s := &coapServer{
 		peer:    newPeer(r),
@@ -46,11 +45,15 @@ func NewServer(network, addr string) Server {
 		address: addr,
 	}
 
+	for _, fn := range opts {
+		fn(s.peer)
+	}
+
 	if s.dtlsOn {
 		s.dtlsDelegate = dtls.NewServer(options.WithMux(r),
 			options.WithOnNewConn(s.newConnCallback))
 
-		l, err := coapnet.NewDTLSListener(network, addr, &piondtls.Config{})
+		l, err := coapnet.NewDTLSListener(network, addr, s.dtlsConf)
 		if err != nil {
 			log.Errorln("new listener failed:", err)
 			return nil
