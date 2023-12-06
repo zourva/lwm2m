@@ -60,13 +60,7 @@ func (m *MessagerServer) Stop() {
 	log.Infoln("lwm2m messager stopped")
 }
 
-// handle request parameters like:
-//
-//	 uri:
-//		/bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
-func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
-	log.Debugf("receive Bootstrap-Request operation, size=%d bytes", req.Length())
-
+func (m *MessagerServer) checkClientBootstrapRequest(req coap.Request) error {
 	ep := req.Query("ep")
 	id := req.SecurityIdentity()
 	if len(ep) != 0 {
@@ -77,12 +71,30 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 		//the LwM2M Client if these fields do not match.
 		if ep != id {
 			err := BadRequest
-			code := coap.CodeBadRequest
+			//code := coap.CodeBadRequest
 			log.Errorf("error bootstrap client: %v, ep(%s) != CN(%s)", err, ep, id)
-			return m.NewAckResponse(req, code)
+			//return m.NewAckResponse(req, code)
+
+			return err
 		}
 	}
 
+	return nil
+}
+
+// handle request parameters like:
+//
+//	 uri:
+//		/bs?ep={Endpoint Client Name}&pct={Preferred Content Format}
+func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
+	log.Debugf("receive Bootstrap-Request operation, size=%d bytes", req.Length())
+
+	if err := m.checkClientBootstrapRequest(req); err != nil {
+		code := coap.CodeBadRequest
+		return m.NewAckResponse(req, code)
+	}
+
+	ep := req.Query("ep")
 	addr := req.Address().String()
 	err := m.lwM2MServer.bootstrapDelegator.OnRequest(ep, addr)
 	code := coap.CodeChanged
@@ -102,6 +114,11 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 //		/bspack?ep={Endpoint Client Name}
 func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 	log.Debugf("receive Bootstrap-Pack-Request operation, size=%d bytes", req.Length())
+
+	if err := m.checkClientBootstrapRequest(req); err != nil {
+		code := coap.CodeBadRequest
+		return m.NewAckResponse(req, code)
+	}
 
 	ep := req.Query("ep")
 	rspPayload, err := m.lwM2MServer.bootstrapDelegator.OnPackRequest(ep)
