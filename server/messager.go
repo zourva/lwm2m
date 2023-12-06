@@ -68,6 +68,21 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 	log.Debugf("receive Bootstrap-Request operation, size=%d bytes", req.Length())
 
 	ep := req.Query("ep")
+	id := req.SecurityIdentity()
+	if len(ep) != 0 {
+		//If the OSCORE Sender ID is not set to Endpoint Client Name, then the LwM2M Server MUST compare the received
+		//Endpoint Client Name identifier with the OSCORE Sender ID of the LwM2M Client. This comparison may either be an
+		//equality match or may involve a dedicated lookup table to ensure that LwM2M Clients cannot intentionally or due to
+		//misconfiguration impersonate other LwM2M Clients. The LwM2M Server MUST respond with a "4.00 Bad Request" to
+		//the LwM2M Client if these fields do not match.
+		if ep != id {
+			err := BadRequest
+			code := coap.CodeBadRequest
+			log.Errorf("error bootstrap client: %v, ep(%s) != CN(%s)", err, ep, id)
+			return m.NewAckResponse(req, code)
+		}
+	}
+
 	addr := req.Address().String()
 	err := m.lwM2MServer.bootstrapDelegator.OnRequest(ep, addr)
 	code := coap.CodeChanged

@@ -38,6 +38,8 @@ type Request interface {
 	ContentFormat() MediaType
 	SetObserve(on bool)
 
+	SecurityIdentity() string
+
 	message() *Message
 }
 
@@ -145,4 +147,12 @@ func (r *request) IsCoRELinkContent() bool {
 
 func (r *request) SetContentFormat(mt MediaType) {
 	r.msg.SetContentFormat(mt)
+}
+
+func (r *request) SecurityIdentity() string {
+	id, ok := r.message().Context().Value(keyClientCertCommonName).(string)
+	if !ok {
+		return ""
+	}
+	return id
 }

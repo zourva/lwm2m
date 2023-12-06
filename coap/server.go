@@ -2,6 +2,8 @@ package coap
 
 import (
 	"context"
+	"crypto/x509"
+	piondtls "github.com/pion/dtls/v2"
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/dtls/server"
 	coapnet "github.com/plgd-dev/go-coap/v3/net"
@@ -11,6 +13,10 @@ import (
 	udpsrv "github.com/plgd-dev/go-coap/v3/udp/server"
 	log "github.com/sirupsen/logrus"
 	"sync"
+)
+
+const (
+	keyClientCertCommonName = "CN"
 )
 
 type Server interface {
@@ -78,6 +84,17 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 func (s *coapServer) newConnCallback(cc *udpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
+
+	dtlsConn, ok := cc.NetConn().(*piondtls.Conn)
+	if ok {
+		//log.Fatalf("invalid type %T", cc.NetConn())
+		clientCert, err := x509.ParseCertificate(dtlsConn.ConnectionState().PeerCertificates[0])
+		if err == nil {
+			if len(clientCert.Subject.CommonName) != 0 {
+				cc.SetContextValue(keyClientCertCommonName, clientCert.Subject.CommonName)
+			}
+		}
+	}
 
 	cc.AddOnClose(func() {
 		log.Infof("connection released: %s-%p", cc.RemoteAddr().String(), cc)
