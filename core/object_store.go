@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/zourva/pareto/endec/senml"
 )
 
 // ObjectInstanceStore implements a data repository
@@ -327,6 +328,18 @@ func (i *InstanceManager) Size() int {
 // allocated from 0.
 func (i *InstanceManager) NextId() InstanceID {
 	return InstanceID(i.Size())
+}
+
+func (i *InstanceManager) MarshalJSON() ([]byte, error) {
+	var pack senml.Pack
+	var records []senml.Record
+
+	for _, v := range i.instances {
+		records = v.AppendSENML(records)
+	}
+
+	pack.Records = records
+	return senml.Encode(pack, senml.JSON)
 }
 
 func NewInstanceManager() *InstanceManager {

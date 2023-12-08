@@ -68,7 +68,7 @@ func (c *LwM2MClient) initialize() error {
 	//c.messager = NewMessager(c)
 	//c.bootstrapper = NewBootstrapper(c)
 	//c.registrar = NewRegistrar(c)
-	c.controller = NewDeviceController()
+	c.controller = NewDeviceController(c)
 	c.reporter = NewReporter(c)
 	c.machine.RegisterStates([]*meta.State[state]{
 		{Name: initiating, Action: c.onInitiating},

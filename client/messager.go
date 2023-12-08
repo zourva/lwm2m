@@ -239,7 +239,7 @@ func (m *MessagerClient) onServerRead(req coap.Request) coap.Response {
 	riId := m.getRIId(req)
 
 	value, err := m.devController().OnRead(oid, oiId, rid, riId)
-	rsp := m.NewAckPiggybackedResponse(req, GetErrorCode(err), value.ToBytes())
+	rsp := m.NewAckPiggybackedResponse(req, GetErrorCode(err), value)
 
 	return rsp
 }

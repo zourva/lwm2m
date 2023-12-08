@@ -31,11 +31,11 @@ type ObjectInstance interface {
 	Field(rid ResourceID, riId InstanceID) Field
 	AddField(f Field)
 
-	Fields(rid ResourceID) []Field
-	SetFields(rid ResourceID, fields []Field)
+	Fields(rid ResourceID) Fields
+	SetFields(rid ResourceID, fields Fields)
 
-	AllFields() map[ResourceID][]Field
-	SetAllFields(all map[ResourceID][]Field)
+	AllFields() map[ResourceID]Fields
+	SetAllFields(all map[ResourceID]Fields)
 
 	// SingleField equals Field(id, 0)
 	SingleField(id ResourceID) Field
@@ -43,8 +43,8 @@ type ObjectInstance interface {
 	// SetSingleField overwrites Field(id, 0)
 	SetSingleField(f Field)
 
+	AppendSENML(dst []senml.Record) []senml.Record
 	MarshalJSON() ([]byte, error)
-
 	String() string
 }
 
@@ -67,21 +67,23 @@ type BaseInstance struct {
 	instId   InstanceID //object instance id
 	operator Operator   //copy from class definition
 
-	resources map[ResourceID][]Field
+	resources map[ResourceID]Fields
 }
+
+var _ ObjectInstance = &BaseInstance{}
 
 func NewObjectInstance(class Object) ObjectInstance {
 	i := &BaseInstance{
 		class:     class,
 		instId:    0,
 		operator:  class.Operator(),
-		resources: make(map[ResourceID][]Field),
+		resources: make(map[ResourceID]Fields),
 	}
 
 	return i
 }
 
-func (o *BaseInstance) findInstance(instances []Field, iid InstanceID) Field {
+func (o *BaseInstance) findInstance(instances Fields, iid InstanceID) Field {
 	for _, i := range instances {
 		if i.InstanceID() == iid {
 			return i
@@ -121,11 +123,11 @@ func (o *BaseInstance) Field(id ResourceID, iid InstanceID) Field {
 	return nil
 }
 
-func (o *BaseInstance) Fields(id ResourceID) []Field {
+func (o *BaseInstance) Fields(id ResourceID) Fields {
 	return o.resources[id]
 }
 
-func (o *BaseInstance) AllFields() map[ResourceID][]Field {
+func (o *BaseInstance) AllFields() map[ResourceID]Fields {
 	return o.resources
 }
 
@@ -153,11 +155,11 @@ func (o *BaseInstance) SetSingleField(f Field) {
 	}
 }
 
-func (o *BaseInstance) SetFields(rid ResourceID, fields []Field) {
+func (o *BaseInstance) SetFields(rid ResourceID, fields Fields) {
 	o.resources[rid] = fields
 }
 
-func (o *BaseInstance) SetAllFields(all map[ResourceID][]Field) {
+func (o *BaseInstance) SetAllFields(all map[ResourceID]Fields) {
 	o.resources = all
 }
 
@@ -166,32 +168,32 @@ func (o *BaseInstance) String() string {
 	return string(tmp)
 }
 
+func (o *BaseInstance) AppendSENML(dst []senml.Record) []senml.Record {
+	bname := GenBaseName(o)
+
+	baseIdx := len(dst)
+	for _, fields := range o.AllFields() {
+		dst = fields.AppendSENML(dst)
+	}
+
+	if baseIdx < len(dst) {
+		dst[baseIdx].BaseName = bname
+	}
+	return dst
+}
+
 func (o *BaseInstance) MarshalJSON() ([]byte, error) {
 	var pack senml.Pack
-	var records []senml.Record
-
-	oid, iid := o.Class().Id(), o.Id()
-	bname := `/` + strconv.Itoa(int(oid)) + `/` + strconv.Itoa(int(iid)) + `/`
-	for fid, f := range o.AllFields() {
-		for _, fi := range f {
-			name := strconv.Itoa(int(fid))
-			if fi.InstanceID() != 0 {
-				name = name + `/` + strconv.Itoa(int(fi.InstanceID()))
-			}
-
-			r := fieldValueToSenmlRecord(fi)
-			r.BaseName = bname
-			r.Name = name
-			// TODO:: add more record fields
-
-			records = append(records, *r)
-
-			bname = "" // 将 bname 清理干净
-		}
-	}
+	records := o.AppendSENML(nil)
 	pack.Records = records
 
 	return senml.Encode(pack, senml.JSON)
+}
+
+func GenBaseName(o ObjectInstance) string {
+	oid, iid := o.Class().Id(), o.Id()
+	bname := `/` + strconv.Itoa(int(oid)) + `/` + strconv.Itoa(int(iid)) + `/`
+	return bname
 }
 
 func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]ObjectInstance, error) {
@@ -250,7 +252,7 @@ func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]Object
 		res := curObj.Class().Resource(fid)
 		val := senmlRecordToFieldValue(res.Type(), r)
 
-		field := NewResourceField2(fiid, res, val)
+		field := NewResourceField2(curObj, fiid, res, val)
 		curObj.AddField(field)
 	}
 
