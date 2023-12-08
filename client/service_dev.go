@@ -7,6 +7,10 @@ type DeviceController struct {
 
 var _ core.DeviceControlClient = &DeviceController{}
 
+func NewDeviceController() *DeviceController {
+	return &DeviceController{}
+}
+
 func (d *DeviceController) validateOID(oid core.ObjectID) bool {
 	return true
 }

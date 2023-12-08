@@ -35,7 +35,7 @@ type MessagerClient struct {
 
 func NewMessager(c *LwM2MClient) *MessagerClient {
 	m := &MessagerClient{
-		Client:      coap.NewClient(c.options.serverAddress[0], coap.WithDTLSConfig(c.options.dtlsConf)),
+		//Client:      coap.NewClient(c.options.serverAddress[0], coap.WithDTLSConfig(c.options.dtlsConf)),
 		mute:        false,
 		state:       disconnected,
 		lwM2MClient: c,
@@ -46,6 +46,41 @@ func NewMessager(c *LwM2MClient) *MessagerClient {
 	m.reporterDelegator = c.reporter
 
 	return m
+}
+
+func (m *MessagerClient) Close() error {
+	if m.Client != nil {
+		log.Debugf("close established connection...")
+
+		err := m.Client.Close()
+		if err != nil {
+			log.Errorf("close established connection failed, err:%v", err)
+			return err
+		}
+		log.Debugf("close established connection successfully")
+	}
+
+	return nil
+}
+
+func (m *MessagerClient) Dial(addr string, opts ...coap.PeerOption) error {
+	log.Debugf("dial new connection(to:%s)...", addr)
+	cli, err := coap.Dial(addr, opts...)
+	if err != nil {
+		return err
+	}
+	m.Client = cli
+	return nil
+}
+
+func (m *MessagerClient) Redial(addr string, opts ...coap.PeerOption) error {
+	if m.Client != nil {
+		if err := m.Close(); err != nil {
+			return err
+		}
+	}
+
+	return m.Dial(addr, opts...)
 }
 
 func (m *MessagerClient) Start() {

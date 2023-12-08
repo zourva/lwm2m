@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"github.com/zourva/lwm2m/coap"
 	"github.com/zourva/lwm2m/core"
 	"sync/atomic"
 	"time"
@@ -15,8 +14,8 @@ import (
 // Unlike other interface implementations,
 // reporter has no standalone loop embedded.
 type Reporter struct {
-	client   *LwM2MClient
-	messager coap.Client
+	client *LwM2MClient
+	//messager coap.Client
 
 	observer *Observer
 
@@ -26,14 +25,18 @@ type Reporter struct {
 
 func NewReporter(c *LwM2MClient) *Reporter {
 	r := &Reporter{
-		client:   c,
-		messager: c.messager,
+		client: c,
+		//messager: c.messager(),
 		observer: newObserver(),
 	}
 
 	r.failure.Store(0)
 
 	return r
+}
+
+func (r *Reporter) messager() *MessagerClient {
+	return r.client.messager()
 }
 
 func (r *Reporter) OnObserve(observationId string, attrs core.NotificationAttrs) error {
@@ -64,12 +67,12 @@ func (r *Reporter) Notify(observationId string, value []byte) error {
 		//return errors.New("invalid observation id")
 	}
 
-	return r.messager.Notify(observationId, value)
+	return r.messager().Notify(observationId, value)
 }
 
 func (r *Reporter) Send(value []byte) ([]byte, error) {
-	req := r.messager.NewPostRequestOpaque(core.SendReportUri, value)
-	rsp, err := r.messager.Send(req)
+	req := r.messager().NewPostRequestOpaque(core.SendReportUri, value)
+	rsp, err := r.messager().Send(req)
 	if err != nil {
 		r.incrementFailCounter()
 		log.Errorf("send opaque request failed: %v ", err)

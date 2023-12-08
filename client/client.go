@@ -46,7 +46,8 @@ type LwM2MClient struct {
 	store ObjectInstanceStore
 
 	//coapConn coap.Client
-	messager *MessagerClient // messager to communicate with server
+	// messagerc - messager client
+	messagerc *MessagerClient // messager to communicate with server
 
 	// lifecycle event manager
 	evtMgr *EventManager
@@ -54,8 +55,8 @@ type LwM2MClient struct {
 	// delegators
 	bootstrapper *Bootstrapper // instance created for the latest try
 	registrar    *Registrar    // instance created for the latest try
-	controller   *DeviceController
 	reporter     *Reporter
+	controller   DeviceControlClient
 
 	bootstrapPending atomic.Bool
 	registerPending  atomic.Bool
@@ -64,9 +65,10 @@ type LwM2MClient struct {
 
 func (c *LwM2MClient) initialize() error {
 	c.makeDefaults()
-	c.messager = NewMessager(c)
+	//c.messager = NewMessager(c)
 	//c.bootstrapper = NewBootstrapper(c)
 	//c.registrar = NewRegistrar(c)
+	c.controller = NewDeviceController()
 	c.reporter = NewReporter(c)
 	c.machine.RegisterStates([]*meta.State[state]{
 		{Name: initiating, Action: c.onInitiating},
@@ -108,6 +110,10 @@ func (c *LwM2MClient) initialize() error {
 	}
 
 	return nil
+}
+
+func (c *LwM2MClient) messager() *MessagerClient {
+	return c.messagerc
 }
 
 func (c *LwM2MClient) hasRegistrationServer() bool {
@@ -152,7 +158,7 @@ func (c *LwM2MClient) doBootstrap() {
 
 	log.Infoln("client is ready to bootstrap")
 
-	c.messager.PauseUserPlane()
+	//c.messager().PauseUserPlane()
 
 	// always create a new bootstrapper
 	c.bootstrapper = NewBootstrapper(c)
@@ -172,7 +178,7 @@ func (c *LwM2MClient) doRegister() {
 	log.Infoln("client is ready to register")
 
 	//c.resetReportFailCounter()
-	c.messager.PauseUserPlane()
+	//c.messager().PauseUserPlane()
 
 	// always create a new bootstrapper
 	c.registrar = NewRegistrar(c)
@@ -182,7 +188,9 @@ func (c *LwM2MClient) doRegister() {
 }
 
 func (c *LwM2MClient) enableService() {
-	c.messager.ResumeUserPlane()
+	c.messagerc = c.registrar.messager
+
+	//c.messager().ResumeUserPlane()
 	c.machine.MoveToState(servicing)
 }
 
@@ -328,21 +336,32 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 	// 在server列表中查找 Register server
 	instances := c.store.GetInstances(OmaObjectSecurity)
 	for _, instance := range instances {
-		if !instance.SingleField(LwM2MSecurityBootstrapServer).Get().(bool) { // BootstrapServer == true
-			address := instance.SingleField(LwM2MSecurityLwM2MServerURI).Get().(string)
-			shortId := instance.SingleField(LwM2MSecurityShortServerID).Get().(int)
+		// bootstrapServer is true, otherwise false
+		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
+		if !isBootstrapServer {
+			address := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
+			shortId := FieldValue[int](instance, LwM2MSecurityShortServerID)
+
+			securityMode := FieldValue[int](instance, LwM2MSecuritySecurityMode)
+			publicKeyOrIdentity := FieldValue[[]byte](instance, LwM2MSecurityPublicKeyOrIdentity)
+			secretKey := FieldValue[[]byte](instance, LwM2MSecuritySecretKey)
+			serverPublicKey := FieldValue[[]byte](instance, LwM2MSecurityServerPublicKeyOrIdentity)
 
 			ms[shortId] = &regServerInfo{
-				lifetime:          defaultLifetime,
-				blocking:          true,
-				bootstrap:         true,
-				address:           address,
-				priorityOrder:     1,
-				initRegDelay:      defInitRegistrationDelay,
-				commRetryLimit:    defCommRetryCount,
-				commRetryDelay:    defCommRetryTimer,
-				commSeqRetryDelay: defCommSeqDelayTimer,
-				commSeqRetryLimit: defCommSeqRetryCount,
+				lifetime:            defaultLifetime,
+				blocking:            true,
+				bootstrap:           true,
+				address:             address,
+				priorityOrder:       1,
+				initRegDelay:        defInitRegistrationDelay,
+				commRetryLimit:      defCommRetryCount,
+				commRetryDelay:      defCommRetryTimer,
+				commSeqRetryDelay:   defCommSeqDelayTimer,
+				commSeqRetryLimit:   defCommSeqRetryCount,
+				securityMode:        securityMode,
+				publicKeyOrIdentity: publicKeyOrIdentity,
+				serverPublicKey:     serverPublicKey,
+				secretKey:           secretKey,
 			}
 		}
 	}
@@ -365,12 +384,11 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 
 // Start runs the client's state-driven loop.
 func (c *LwM2MClient) Start() bool {
-	c.messager.Start()
 	return c.machine.Startup()
 }
 
 func (c *LwM2MClient) Stop() {
-	//c.messager.Stop()
+	//c.messager().Stop()
 	c.machine.Shutdown()
 	_ = c.store.StorageManager().Close()
 }

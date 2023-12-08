@@ -48,6 +48,16 @@ type ObjectInstance interface {
 	String() string
 }
 
+func FieldValue[T bool | int | string | []byte](inst ObjectInstance, id ResourceID) T {
+	f := inst.SingleField(id)
+	if f != nil {
+		return f.Get().(T)
+	}
+
+	var v T
+	return v
+}
+
 type InstanceMap = map[InstanceID]ObjectInstance
 
 type InstanceIdsMap = map[ObjectID][]InstanceID

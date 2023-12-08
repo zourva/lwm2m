@@ -178,7 +178,7 @@ func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
 	s := &Bootstrapper{
 		StateMachine: meta.NewStateMachine[state]("bootstrapper", time.Second),
 		client:       client,
-		messager:     client.messager,
+		messager:     nil,
 	}
 
 	s.RegisterStates([]*meta.State[state]{
@@ -210,14 +210,16 @@ func (r *Bootstrapper) Timeout() bool {
 }
 
 func (r *Bootstrapper) onInitiating(_ any) {
-	if err := r.PackRequest(); err != nil {
-		log.Errorf("bootstrap failed: %v", err)
+	messager, err := coap.Dial(r.client.options.serverAddress[0], coap.WithDTLSConfig(r.client.options.dtlsConf))
+	if err != nil {
+		log.Errorf("bootstrap dial failed: %v", err)
 		return
 	}
+	r.messager = messager
 
-	log.Infof("bootstrap requested")
+	log.Infof("bootstrap initiated")
 
-	r.MoveToState(bootstrapped)
+	r.MoveToState(bootstrapping)
 }
 
 // NOTE: not used for packed request.
@@ -227,6 +229,15 @@ func (r *Bootstrapper) onBootstrapping(_ any) {
 	//	log.Infof("bootstrap done")
 	//	return
 	//}
+
+	if err := r.PackRequest(); err != nil {
+		log.Errorf("bootstrap failed: %v", err)
+		return
+	}
+
+	log.Infof("bootstrap requested")
+
+	r.MoveToState(bootstrapped)
 }
 
 func (r *Bootstrapper) onBootstrapped(_ any) {

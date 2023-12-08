@@ -19,6 +19,7 @@ type Client interface {
 	// a response from remote.
 	Send(req Request) (Response, error)
 	Notify(key string, value []byte) error
+	Close() error
 }
 
 type coapClient struct {
@@ -26,7 +27,9 @@ type coapClient struct {
 	delegate *udpclt.Conn
 }
 
-func NewClient(server string, opts ...PeerOption) Client {
+var _ Client = &coapClient{}
+
+func Dial(server string, opts ...PeerOption) (Client, error) {
 	c := &coapClient{
 		peer: newPeer(NewRouter()),
 	}
@@ -38,7 +41,8 @@ func NewClient(server string, opts ...PeerOption) Client {
 	if c.dtlsOn {
 		dial, err := dtls.Dial(server, c.dtlsConf)
 		if err != nil {
-			log.Fatalf("error dialing dtls: %v", err)
+			log.Errorf("error dialing dtls: %v", err)
+			return nil, err
 		}
 
 		//dial.NetConn().SetReadDeadline()
@@ -48,13 +52,14 @@ func NewClient(server string, opts ...PeerOption) Client {
 	} else {
 		dial, err := udp.Dial(server)
 		if err != nil {
-			log.Fatalf("error dialing udp: %v", err)
+			log.Errorf("error dialing dtls: %v", err)
+			return nil, err
 		}
 
 		c.delegate = dial
 	}
 
-	return c
+	return c, nil
 }
 
 func (s *coapClient) Send(req Request) (Response, error) {
@@ -76,4 +81,8 @@ func (s *coapClient) Notify(observationId string, data []byte) error {
 	//m.SetObserve(uint32(obs))
 
 	return s.delegate.WriteMessage(m)
+}
+
+func (s *coapClient) Close() error {
+	return s.delegate.Close()
 }
