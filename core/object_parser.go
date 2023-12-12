@@ -98,7 +98,7 @@ func ParseObject(objJSON string) Object {
 	return class
 }
 
-func pathToIds(src string, sep string) ([]uint16, error) {
+func ParsePathToNumbers(src string, sep string) ([]uint16, error) {
 	var ids []uint16
 
 	if len(src) == 0 {
@@ -165,7 +165,7 @@ func fieldValueToSenmlRecord(src Field) *senml.Record {
 	return r
 }
 
-func senmlRecordToFieldValue(kind ValueType, val *senml.Record) Value {
+func SenmlRecordToFieldValue(kind ValueType, val *senml.Record) Value {
 	switch kind {
 	case ValueTypeEmpty:
 		return Empty()

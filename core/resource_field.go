@@ -20,13 +20,30 @@ type Field interface {
 
 var _ Field = &ResourceField{}
 
-type Fields []Field
+type Fields map[InstanceID]Field
+
+func NewFields() Fields {
+	//return orderedmap.New[string, string]()
+	return make(Fields)
+}
+
+func (f Fields) Add(s Field) {
+	f[s.InstanceID()] = s
+}
+
+func (f Fields) Update(s Field) {
+	f[s.InstanceID()] = s
+}
 
 func (f Fields) Field(id InstanceID) Field {
-	for _, v := range f {
-		if v.InstanceID() == id {
-			return v
-		}
+	//for _, v := range f {
+	//	if v.InstanceID() == id {
+	//		return v
+	//	}
+	//}
+	v, ok := f[id]
+	if ok {
+		return v
 	}
 	return nil
 }

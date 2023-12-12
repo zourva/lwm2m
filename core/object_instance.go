@@ -144,15 +144,36 @@ func (o *BaseInstance) SetId(id InstanceID) {
 }
 
 func (o *BaseInstance) AddField(f Field) {
-	o.resources[f.Class().Id()] = append(o.resources[f.Class().Id()], f)
+	rid := f.Class().Id()
+	fields, ok := o.resources[rid]
+	if !ok {
+		// add new field
+		//err := o.operator.Add(o, rid, f.InstanceID(), f)
+		//if err != nil {
+		//	return
+		//}
+
+		fields = NewFields()
+		o.resources[rid] = fields
+		fields.Add(f)
+	} else {
+		// update field
+		//err := o.operator.Update(o, rid, f.InstanceID(), f)
+		//if err != nil {
+		//	return
+		//}
+
+		fields.Update(f)
+	}
 }
 
 func (o *BaseInstance) SetSingleField(f Field) {
-	if len(o.resources[f.Class().Id()]) == 0 {
-		o.AddField(f)
-	} else {
-		o.resources[f.Class().Id()][0] = f
-	}
+	//if len(o.resources[f.Class().Id()]) == 0 {
+	//	o.AddField(f)
+	//} else {
+	//	o.resources[f.Class().Id()].Add(f)
+	//}
+	o.AddField(f)
 }
 
 func (o *BaseInstance) SetFields(rid ResourceID, fields Fields) {
@@ -196,19 +217,26 @@ func GenBaseName(o ObjectInstance) string {
 	return bname
 }
 
-func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]ObjectInstance, error) {
-	var err error
-	var ori, normalize senml.Pack
-
-	ori, err = senml.Decode([]byte(str), senml.JSON)
-	if err != nil {
-		log.Errorf("senml decode failed, err:%v", err)
-		return nil, err
+func NewObjectInstance2(oid ObjectID, iid InstanceID, registry ObjectRegistry) (ObjectInstance, error) {
+	class := registry.GetObject(oid)
+	if class == nil {
+		log.Errorf("unsupported object(%d)", oid)
+		return nil, fmt.Errorf("unsupported object(%d)", oid)
 	}
 
-	normalize, err = senml.Normalize(ori)
+	// new objects
+	instance := NewObjectInstance(class)
+	instance.SetId(iid)
+	return instance, nil
+}
+
+func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]ObjectInstance, error) {
+	var err error
+	var normalize senml.Pack
+
+	normalize, err = senml.DecodeAndNormalize([]byte(str), senml.JSON)
 	if err != nil {
-		log.Errorf("senml normalize failed, err:%v", err)
+		log.Errorf("senml decode failed, err:%v", err)
 		return nil, err
 	}
 
@@ -217,7 +245,7 @@ func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]Object
 	var objects []ObjectInstance
 	for i := 0; i < len(normalize.Records); i++ {
 		r := &normalize.Records[i]
-		if ids, err = pathToIds(r.Name, "/"); err != nil || len(ids) < 3 {
+		if ids, err = ParsePathToNumbers(r.Name, "/"); err != nil || len(ids) < 3 {
 			return nil, fmt.Errorf("invalid path:%s, err:%v", r.Name, err)
 		}
 
@@ -236,21 +264,15 @@ func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]Object
 				objects = append(objects, curObj)
 				curObj = nil
 			}
-
-			obj := registry.GetObject(oid)
-			if obj == nil {
-				log.Errorf("parse object with senml failed, unsupported object(%d)", oid)
-				return nil, fmt.Errorf("unsupported object(%d)", oid)
+			curObj, err = NewObjectInstance2(oid, iid, registry)
+			if err != nil {
+				return nil, err
 			}
-
-			// new objects
-			curObj = NewObjectInstance(obj)
-			curObj.SetId(iid)
 		}
 
 		// add field
 		res := curObj.Class().Resource(fid)
-		val := senmlRecordToFieldValue(res.Type(), r)
+		val := SenmlRecordToFieldValue(res.Type(), r)
 
 		field := NewResourceField2(curObj, fiid, res, val)
 		curObj.AddField(field)

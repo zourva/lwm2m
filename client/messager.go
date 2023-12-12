@@ -241,6 +241,7 @@ func (m *MessagerClient) onServerRead(req coap.Request) coap.Response {
 	value, err := m.devController().OnRead(oid, oiId, rid, riId)
 	rsp := m.NewAckPiggybackedResponse(req, GetErrorCode(err), value)
 
+	log.Debugf("on read response:%s", value)
 	return rsp
 }
 
@@ -269,7 +270,8 @@ func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
 	rid := m.getRID(req)
 	riId := m.getRIId(req)
 
-	err := m.devController().OnWrite(oid, oiId, rid, riId, String(""))
+	value := req.Body()
+	err := m.devController().OnWrite(oid, oiId, rid, riId, value)
 
 	return m.NewAckResponse(req, GetErrorCode(err))
 }

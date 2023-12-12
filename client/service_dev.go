@@ -2,7 +2,9 @@ package client
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/core"
+	"github.com/zourva/pareto/endec/senml"
 )
 
 type DeviceController struct {
@@ -13,6 +15,7 @@ var (
 	errInvalidObjectId = fmt.Errorf("invalid oid")
 	errNotFound        = fmt.Errorf("not found")
 	errNotExists       = fmt.Errorf("not exists")
+	errNoPermission    = fmt.Errorf("no permission")
 )
 
 var _ core.DeviceControlClient = &DeviceController{}
@@ -67,45 +70,101 @@ func (d *DeviceController) OnCreate(oid core.ObjectID, newValue core.Value) erro
 	return nil
 }
 
-func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) ([]byte, error) {
-	//TODO implement me
-	//panic("implement me")
+func (d *DeviceController) errorConvert(value []byte, err error) ([]byte, error) {
+	if err == nil {
+		return value, err
+	}
+	return value, core.InternalServerError
+}
 
+func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) ([]byte, error) {
 	if oid == core.NoneID {
-		return nil, errInvalidObjectId
+		log.Errorf("read failed, invalid oid:%d", oid)
+		return nil, core.BadRequest
 	}
 
 	objs := d.client.store.GetInstanceManager(oid)
 	if objs != nil {
 		if instId == core.NoneID {
-			return objs.MarshalJSON()
+			return d.errorConvert(objs.MarshalJSON())
 		}
 
 		inst := objs.Get(instId)
 		if inst != nil {
 			if resId == core.NoneID {
-				return inst.MarshalJSON()
+				return d.errorConvert(inst.MarshalJSON())
 			}
 			res := inst.Fields(resId)
 			if res != nil {
 				if resInstId == core.NoneID {
-					return res.MarshalJSON()
+					return d.errorConvert(res.MarshalJSON())
 				}
 
 				field := res.Field(resInstId)
 				if field != nil {
-					return field.MarshalJSON()
+					return d.errorConvert(field.MarshalJSON())
 				}
 			}
 		}
 	}
 
-	return nil, errNotExists
+	return nil, core.NotFound
 }
 
-func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID, newValue core.Value) error {
-	//TODO implement me
-	panic("implement me")
+func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID, newValue []byte) error {
+	if oid == core.NoneID || instId == core.NoneID {
+		log.Errorf("write failed, invalid object id(%d) or instance id(%d)", oid, instId)
+		return core.BadRequest
+	}
+
+	var err error
+	var normalize senml.Pack
+	objmgr := d.client.store.GetInstanceManager(oid)
+	instance := objmgr.Get(instId)
+	if instance == nil {
+		instance, err = core.NewObjectInstance2(oid, instId, d.client.store.ObjectRegistry())
+		if err != nil {
+			log.Errorf("write failed: %v", err)
+			return core.NotImplemented
+		}
+	}
+
+	normalize, err = senml.DecodeAndNormalize(newValue, senml.JSON)
+	if err != nil {
+		log.Errorf("write failed: %v", err)
+		return core.BadRequest
+	}
+
+	var ids []uint16
+	for i := 0; i < len(normalize.Records); i++ {
+		r := &normalize.Records[i]
+		if ids, err = core.ParsePathToNumbers(r.Name, "/"); err != nil || len(ids) < 3 {
+			log.Errorf("write failed: invalid path:%s, err:%v", r.Name, err)
+			return core.BadRequest
+		}
+
+		xoid, xiid, xrid, xriid := ids[0], ids[1], ids[2], uint16(0)
+		if len(ids) > 3 {
+			xriid = ids[3]
+		}
+
+		if instance.Class().Id() != xoid || instance.Id() != xiid {
+			log.Errorf("write failed: multiple oids or iids specified")
+			return core.NotAcceptable
+		}
+
+		// add field
+		res := instance.Class().Resource(xrid)
+		val := core.SenmlRecordToFieldValue(res.Type(), r)
+
+		field := core.NewResourceField2(instance, xriid, res, val)
+		instance.AddField(field)
+	}
+
+	objmgr.Add(instance)
+	err = d.client.store.Flush()
+
+	return err
 }
 
 func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) error {

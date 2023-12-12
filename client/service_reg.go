@@ -343,7 +343,7 @@ func (r *Registrar) loadDTLSConfig(server *regServerInfo) (*piondtls.Config, err
 
 		var rootCertPool *x509.CertPool
 		if len(server.serverPublicKey) != 0 {
-			rootCertPool, err = cipher.LoadCertPool(server.serverPublicKey)
+			rootCertPool, err = cipher.LoadAllCertPool([]string{string(server.serverPublicKey)})
 			if err != nil {
 				log.Errorf("load root certificate failed, err:%v", err)
 				return nil, err

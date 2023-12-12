@@ -59,7 +59,7 @@ type DeviceControlClient interface {
 	//  path: /{Object ID}/{Object Instance ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}
 	//        /{Object ID}/{Object Instance ID}/{Resource ID}/{Resource Instance ID}
-	OnWrite(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) error
+	OnWrite(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue []byte) error
 
 	// OnDelete implements Delete operation
 	//  method: DELETE
