@@ -94,9 +94,12 @@ func (s *DBStorage) Flush() error {
 			upsert := s.db.Update
 
 			unique := s.uniqueId(instance)
-			err = s.db.One("unique", unique, &ObjectRecord{})
+			var tmp ObjectRecord
+			err = s.db.One("Unique", unique, &tmp)
 			if err != nil {
 				upsert = s.db.Save
+			} else {
+				record.Pk = tmp.Pk
 			}
 
 			err = upsert(record)
@@ -114,9 +117,16 @@ func (s *DBStorage) Flush() error {
 }
 
 func (s *DBStorage) serialize(instance ObjectInstance) *ObjectRecord {
+	var content any
+	str := instance.String()
+	err := json.Unmarshal([]byte(str), &content)
+	if err != nil {
+		return nil
+	}
+
 	record := &ObjectRecord{
 		Unique:  s.uniqueId(instance),
-		Content: instance.String(),
+		Content: content,
 	}
 
 	return record
@@ -125,7 +135,11 @@ func (s *DBStorage) serialize(instance ObjectInstance) *ObjectRecord {
 func (s *DBStorage) deserialize(record *ObjectRecord) ObjectInstance {
 	registry := s.store.ObjectRegistry()
 
-	instance, err := ParseObjectInstancesWithJSON(registry, record.Content)
+	str, err := json.Marshal(record.Content)
+	if err != nil {
+		return nil
+	}
+	instance, err := ParseObjectInstancesWithJSON(registry, string(str))
 	if err != nil {
 		log.Errorf("parse object with json failed, err:%v, string:%s", err, record.Content)
 		return nil

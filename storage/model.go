@@ -28,7 +28,7 @@ type ObjectDescriptor struct {
 type ObjectRecord struct {
 	Pk      int    `storm:"id,increment"` //not used
 	Unique  uint32 `storm:"unique"`
-	Content string
+	Content any
 }
 
 type DBObject struct {
