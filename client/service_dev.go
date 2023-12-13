@@ -50,24 +50,22 @@ func (d *DeviceController) preCheck(oid core.ObjectID, oiId core.InstanceID, rid
 	return core.ErrorNone
 }
 
-func (d *DeviceController) OnCreate(oid core.ObjectID, newValue core.Value) error {
-	//TODO implement me
-	panic("implement me")
+func (d *DeviceController) OnCreate(oid core.ObjectID, newValue []byte) error {
+	if oid == core.NoneID {
+		log.Errorf("create failed, the object id(%d) not specified", oid)
+		return core.BadRequest
+	}
 
-	//registry := d.client.store.ObjectRegistry()
-	//cls := registry.GetObject(oid)
-	//obj := core.NewObjectInstance(cls)
-	//obj.SetId(oid)
-	//
-	//res := obj.Class().Resource(fid)
-	//
-	//core.NewResourceField2(fiid, res, val)
-	//obj.AddField()
-	//
-	////obj := core.NewObjectInstance()
-	//d.client.store.GetInstanceManager(oid).Add()
+	instances, err := core.ParseObjectInstancesWithJSON(d.client.store.ObjectRegistry(), string(newValue))
+	mgr := d.client.store.GetInstanceManager(oid)
+	for _, inst := range instances {
+		err = mgr.Upsert(inst)
+		if err != nil {
+			return err
+		}
+	}
 
-	return nil
+	return err
 }
 
 func (d *DeviceController) errorConvert(value []byte, err error) ([]byte, error) {
@@ -155,21 +153,65 @@ func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, re
 
 		// add field
 		res := instance.Class().Resource(xrid)
-		val := core.SenmlRecordToFieldValue(res.Type(), r)
+		if res.Operations()&core.OpWrite != core.OpWrite {
+			log.Errorf("write failed: %s", core.Forbidden)
+			return core.Forbidden
+		}
 
+		val := core.SenmlRecordToFieldValue(res.Type(), r)
 		field := core.NewResourceField2(instance, xriid, res, val)
 		instance.AddField(field)
 	}
 
-	objmgr.Add(instance)
-	err = d.client.store.Flush()
+	err = objmgr.Upsert(instance)
+	if err != nil {
+		return err
+	}
 
 	return err
 }
 
 func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) error {
-	//TODO implement me
-	panic("implement me")
+	if oid == core.NoneID || instId == core.NoneID {
+		log.Errorf("delete failed, invalid object id(%d) or instance id(%d)", oid, instId)
+		return core.BadRequest
+	}
+
+	var err error
+	objmgr := d.client.store.GetInstanceManager(oid)
+	instance := objmgr.Get(instId)
+	if instance == nil {
+		log.Warnf("delete failed: not found")
+		return core.NotFound
+	}
+
+	if resId == core.NoneID || resInstId == core.NoneID {
+		err = objmgr.Delete(instId)
+		if err != nil {
+			log.Warnf("delete failed: %v", err)
+			return core.InternalServerError
+		}
+		log.Debugf("delete(%d,%d) successfully", oid, instId)
+	} else {
+		f := instance.Field(resId, resInstId)
+		if f == nil {
+			log.Warnf("delete failed: not found")
+			return core.NotFound
+		}
+
+		if (f.Class().Operations() & core.OpWrite) != core.OpWrite {
+			log.Warnf("delete failed: %v", core.Forbidden)
+			return core.Forbidden
+		}
+
+		instance.DelField(resId, resInstId)
+		if err = objmgr.Upsert(instance); err != nil {
+			return core.InternalServerError
+		}
+		log.Debugf("delete(%d,%d,%d,%d) successfully", oid, instId, resId, resInstId)
+	}
+
+	return err
 }
 
 func (d *DeviceController) OnExecute(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, args string) error {

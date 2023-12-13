@@ -30,6 +30,7 @@ type ObjectInstance interface {
 
 	Field(rid ResourceID, riId InstanceID) Field
 	AddField(f Field)
+	DelField(rid ResourceID, riId InstanceID)
 
 	Fields(rid ResourceID) Fields
 	SetFields(rid ResourceID, fields Fields)
@@ -121,6 +122,11 @@ func (o *BaseInstance) Field(id ResourceID, iid InstanceID) Field {
 	}
 
 	return nil
+}
+func (o *BaseInstance) DelField(rid ResourceID, riId InstanceID) {
+	if instances, ok := o.resources[rid]; ok {
+		instances.Delete(riId)
+	}
 }
 
 func (o *BaseInstance) Fields(id ResourceID) Fields {
@@ -256,10 +262,6 @@ func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]Object
 
 		if curObj == nil || curObj.Class().Id() != oid || curObj.Id() != iid {
 			if curObj != nil {
-				err = curObj.Construct()
-				if err != nil {
-					return nil, err
-				}
 				// append
 				objects = append(objects, curObj)
 				curObj = nil
@@ -279,10 +281,6 @@ func ParseObjectInstancesWithJSON(registry ObjectRegistry, str string) ([]Object
 	}
 
 	if curObj != nil {
-		err = curObj.Construct()
-		if err != nil {
-			return nil, err
-		}
 		// append
 		objects = append(objects, curObj)
 	}

@@ -43,7 +43,7 @@ type DeviceControlClient interface {
 	//    4.05 Method Not Allowed Target is not allowed for "Create" operation
 	//    4.06 Not Acceptable The specified Content-Format is not supported
 	//    4.15 Unsupported content format The specified format is not supported
-	OnCreate(oid ObjectID, newValue Value) error
+	OnCreate(oid ObjectID, newValue []byte) error
 
 	// OnRead implements Read operation
 	//  method: GET

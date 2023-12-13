@@ -225,7 +225,8 @@ func (m *MessagerClient) onServerCreate(req coap.Request) coap.Response {
 	log.Debugln("receive create request:", req.Path())
 
 	objectId := m.getOID(req)
-	err := m.devController().OnCreate(objectId, String(""))
+	value := req.Body()
+	err := m.devController().OnCreate(objectId, value)
 
 	return m.NewAckResponse(req, GetErrorCode(err))
 }

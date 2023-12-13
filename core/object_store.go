@@ -297,15 +297,33 @@ type InstanceManager struct {
 
 type InstanceMgrMap = map[ObjectID]*InstanceManager
 
-func (i *InstanceManager) Add( /*id InstanceID,*/ object ObjectInstance) {
-	//object.SetId(id)
-	i.instances[object.Id()] = object
-}
-
 func (i *InstanceManager) Get(id InstanceID) ObjectInstance {
 	if v, ok := i.instances[id]; ok {
 		return v
 	}
+	return nil
+}
+
+func (i *InstanceManager) Upsert(object ObjectInstance) error {
+	if err := object.Construct(); err != nil {
+		log.Errorf("call ObjectInstance::Construct failed, %v", err)
+		return err
+	}
+
+	i.instances[object.Id()] = object
+	return nil
+}
+
+func (i *InstanceManager) Delete(id InstanceID) error {
+	if v, ok := i.instances[id]; ok {
+		err := v.Destruct()
+		if err != nil {
+			log.Errorf("call ObjectInstance::Destruct failed, %v", err)
+			return err
+		}
+		delete(i.instances, id)
+	}
+
 	return nil
 }
 

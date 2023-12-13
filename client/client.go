@@ -147,10 +147,12 @@ func (c *LwM2MClient) getBootstrapServerAccount() *BootstrapServerAccount {
 func (c *LwM2MClient) saveObjectInstances(objs []ObjectInstance) error {
 	for _, o := range objs {
 		im := c.store.GetInstanceManager(o.Class().Id())
-		im.Add(o)
+		if err := im.Upsert(o); err != nil {
+			return err
+		}
 	}
 
-	return c.store.Flush()
+	return nil
 }
 
 func (c *LwM2MClient) doBootstrap() {

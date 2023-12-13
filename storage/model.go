@@ -31,6 +31,17 @@ type ObjectRecord struct {
 	Content any
 }
 
+func newObjectRecord(unique uint32, content any) *ObjectRecord {
+	if content == nil {
+		// make default []
+		content = make([]any, 0)
+	}
+	return &ObjectRecord{
+		Unique:  unique,
+		Content: content,
+	}
+}
+
 type DBObject struct {
 	Id           core.ObjectID `storm:"id"`
 	Name         string

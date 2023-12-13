@@ -75,39 +75,65 @@ func (s *DBStorage) Load() error {
 	for _, record := range all {
 		instance := s.deserialize(&record)
 		if instance != nil {
-			s.store.GetInstanceManager(instance.Class().Id()).Add(instance)
+			s.store.GetInstanceManager(instance.Class().Id()).Upsert(instance)
 		}
 	}
 
 	return nil
 }
+
 func (s *DBStorage) uniqueId(instance ObjectInstance) uint32 {
 	unique := uint32(instance.Class().Id()+1)<<16 | uint32(instance.Id()+1)
 	return unique
 }
-func (s *DBStorage) Flush() error {
+
+func (s *DBStorage) deleteInstance(instance ObjectInstance) error {
+	unique := s.uniqueId(instance)
+
+	var tmp ObjectRecord
+	if err := s.db.One("Unique", unique, &tmp); err != nil {
+		return nil
+	}
+
+	err := s.db.DeleteStruct(&tmp)
+	if err != nil {
+		log.Errorln("boltdb delete ObjectRecord failed:", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *DBStorage) upsertInstance(instance ObjectInstance) error {
 	var err error
+	record := s.serialize(instance)
+	upsert := s.db.Update
+
+	unique := s.uniqueId(instance)
+	var tmp ObjectRecord
+	err = s.db.One("Unique", unique, &tmp)
+	if err != nil {
+		upsert = s.db.Save
+	} else {
+		record.Pk = tmp.Pk
+	}
+
+	err = upsert(record)
+	if err != nil {
+		log.Errorln("boltdb import ObjectRecord failed:", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *DBStorage) Flush() error {
 	total := 0
 	for _, im := range s.store.GetInstanceManagers() {
 		for _, instance := range im.GetAll() {
-			record := s.serialize(instance)
-			upsert := s.db.Update
-
-			unique := s.uniqueId(instance)
-			var tmp ObjectRecord
-			err = s.db.One("Unique", unique, &tmp)
-			if err != nil {
-				upsert = s.db.Save
-			} else {
-				record.Pk = tmp.Pk
+			if err := s.upsertInstance(instance); err != nil {
+				return InternalServerError
 			}
-
-			err = upsert(record)
-			if err != nil {
-				log.Errorln("boltdb import ObjectRecord failed:", err)
-				return err
-			}
-
 			total++
 		}
 	}
@@ -124,10 +150,7 @@ func (s *DBStorage) serialize(instance ObjectInstance) *ObjectRecord {
 		return nil
 	}
 
-	record := &ObjectRecord{
-		Unique:  s.uniqueId(instance),
-		Content: content,
-	}
+	record := newObjectRecord(s.uniqueId(instance), content)
 
 	return record
 }
@@ -145,7 +168,11 @@ func (s *DBStorage) deserialize(record *ObjectRecord) ObjectInstance {
 		return nil
 	}
 
-	return instance[0]
+	if len(instance) > 0 {
+		return instance[0]
+
+	}
+	return nil
 }
 
 func (s *DBStorage) getDBObject(oid ObjectID) *DBObject {
@@ -199,52 +226,32 @@ func (s *DBStorage) getDBObservation(oid ObjectID, oiId InstanceID,
 	return val
 }
 
-func (s *DBStorage) InsertInstanceResources(inst ObjectInstance) error {
+func (s *DBStorage) InsertInstanceResources(instance ObjectInstance) error {
 	//tx, err := s.db.Begin(true)
 	//if err != nil {
 	//	log.Errorln("InsertInstanceResources begin transaction failed:", err)
 	//	return InternalServerError
 	//}
 	//defer tx.Rollback()
-	//
-	//for rid, fields := range inst.AllFields() {
-	//	for riId, field := range fields {
-	//		err = s.db.Save(&DBInstance{
-	//			OId:   inst.Class().Id(),
-	//			OIId:  inst.Id(),
-	//			RId:   rid,
-	//			RIId:  InstanceID(riId),
-	//			Value: field,
-	//		})
-	//		if err != nil {
-	//			log.Errorln("InsertInstanceResources save failed:", err)
-	//			return InternalServerError
-	//		}
-	//	}
-	//}
-	//
-	//if err = tx.Commit(); err != nil {
-	//	log.Errorln("InsertInstanceResources commit transaction failed:", err)
-	//	return InternalServerError
-	//}
+
+	if err := s.upsertInstance(instance); err != nil {
+		return InternalServerError
+	}
 
 	return ErrorNone
 }
 
-func (s *DBStorage) DeleteInstanceResources(inst ObjectInstance) error {
+func (s *DBStorage) DeleteInstanceResources(instance ObjectInstance) error {
 	//tx, err := s.db.Begin(true)
 	//if err != nil {
 	//	log.Errorln("DeleteInstanceResources begin transaction failed:", err)
 	//	return InternalServerError
 	//}
 	//defer tx.Rollback()
-	//
-	//s.db.DeleteStruct()
-	//
-	//if err = tx.Commit(); err != nil {
-	//	log.Errorln("DeleteInstanceResources commit transaction failed:", err)
-	//	return InternalServerError
-	//}
+
+	if err := s.deleteInstance(instance); err != nil {
+		return InternalServerError
+	}
 
 	return ErrorNone
 }

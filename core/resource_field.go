@@ -35,6 +35,10 @@ func (f Fields) Update(s Field) {
 	f[s.InstanceID()] = s
 }
 
+func (f Fields) Delete(id InstanceID) {
+	delete(f, id)
+}
+
 func (f Fields) Field(id InstanceID) Field {
 	//for _, v := range f {
 	//	if v.InstanceID() == id {
