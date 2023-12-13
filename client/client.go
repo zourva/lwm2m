@@ -144,17 +144,6 @@ func (c *LwM2MClient) getBootstrapServerAccount() *BootstrapServerAccount {
 	return nil
 }
 
-func (c *LwM2MClient) saveObjectInstances(objs []ObjectInstance) error {
-	for _, o := range objs {
-		im := c.store.GetInstanceManager(o.Class().Id())
-		if err := im.Upsert(o); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (c *LwM2MClient) doBootstrap() {
 	c.clearBootstrapPending()
 

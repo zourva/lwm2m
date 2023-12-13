@@ -98,10 +98,13 @@ func (r *Bootstrapper) PackRequest() error {
 			return fmt.Errorf("parse failed")
 		}
 
-		err = r.client.saveObjectInstances(objs)
-		if err != nil {
-			log.Errorf("bootstrap save pack response info failed, err:%v", err)
-			return err
+		for _, o := range objs {
+			// save register server
+			im := r.client.store.GetInstanceManager(o.Class().Id())
+			if err = im.Upsert(o); err != nil {
+				log.Errorf("bootstrap save pack response info failed, err:%v", err)
+				return err
+			}
 		}
 
 		// TODO: save cookies from server
