@@ -57,11 +57,22 @@ func (d *DeviceController) OnCreate(oid core.ObjectID, newValue []byte) error {
 	}
 
 	instances, err := core.ParseObjectInstancesWithJSON(d.client.store.ObjectRegistry(), string(newValue))
+	if err != nil {
+		log.Errorf("create failed, parse json failed, %s", err)
+		return core.BadRequest
+	}
+
 	mgr := d.client.store.GetInstanceManager(oid)
 	for _, inst := range instances {
+		if inst.Class().Id() != oid {
+			log.Errorf("create failed, the oid(%d) is not specialed", inst.Class().Id())
+			return core.BadRequest
+		}
+
 		err = mgr.Upsert(inst)
 		if err != nil {
-			return err
+			log.Errorf("create failed, %v", err)
+			return core.InternalServerError
 		}
 	}
 

@@ -37,7 +37,7 @@ type ObjectInstanceStore interface {
 	//GetInstanceManager returns the instance manager
 	//for the given object and create a new one if not found.
 	GetInstanceManager(id ObjectID) *InstanceManager
-	GetInstanceManagers() InstanceMgrMap
+	GetInstanceManagers() InstanceManagers
 	GetInstances(id ObjectID) InstanceMap
 
 	// GetInstance returns instance of an object
@@ -97,7 +97,7 @@ func NewObjectInstanceStore(r ObjectRegistry) ObjectInstanceStore {
 
 type objectInstanceStore struct {
 	registry ObjectRegistry
-	managers map[ObjectID]*InstanceManager
+	managers InstanceManagers
 	//operators OperatorMap    //operators bound
 	enabled InstanceIdsMap //instances enabled
 
@@ -163,7 +163,7 @@ func (s *objectInstanceStore) GetInstanceManager(id ObjectID) *InstanceManager {
 	return im
 }
 
-func (s *objectInstanceStore) GetInstanceManagers() map[ObjectID]*InstanceManager {
+func (s *objectInstanceStore) GetInstanceManagers() InstanceManagers {
 	return s.managers
 }
 
@@ -295,7 +295,7 @@ type InstanceManager struct {
 	instances InstanceMap
 }
 
-type InstanceMgrMap = map[ObjectID]*InstanceManager
+type InstanceManagers = map[ObjectID]*InstanceManager
 
 func (i *InstanceManager) Get(id InstanceID) ObjectInstance {
 	if v, ok := i.instances[id]; ok {
