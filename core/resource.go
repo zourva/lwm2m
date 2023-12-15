@@ -161,7 +161,7 @@ const (
 
 const (
 	SecurityModePreSharedKey = 0
-	SecurityModeRawPK        = 1
+	SecurityModeRawPublicKey = 1
 	SecurityModeCertificate  = 2
 	SecurityModeNoSec        = 3
 )

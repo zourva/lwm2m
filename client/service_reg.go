@@ -359,7 +359,7 @@ func (r *Registrar) loadDTLSConfig(server *regServerInfo) (*piondtls.Config, err
 			//InsecureSkipVerify:   dtls.InsecureSkipVerify,
 		}
 	//case SecurityModePreSharedKey:
-	//case SecurityModeRawPK:
+	//case SecurityModeRawPublicKey:
 	case SecurityModeNoSec:
 		// nothing todo
 		break

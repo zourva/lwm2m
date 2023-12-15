@@ -1,6 +1,8 @@
 package core
 
-import "github.com/zourva/lwm2m/objects"
+import (
+	"github.com/zourva/lwm2m/objects"
+)
 
 //type OperationType = int
 //
