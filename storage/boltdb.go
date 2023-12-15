@@ -29,7 +29,7 @@ func NewDBStorage(name string) *DBStorage {
 
 func (s *DBStorage) Open() error {
 	db, err := storm.Open(s.name,
-		storm.BoltOptions(0755, &bolt.Options{Timeout: 10 * time.Second}))
+		storm.BoltOptions(0644, &bolt.Options{Timeout: 10 * time.Second}))
 
 	if err != nil {
 		log.Errorf("open boltdb %s failed: %v", s.name, err)
