@@ -27,45 +27,45 @@ func NewFields() Fields {
 	return make(Fields)
 }
 
-func (f Fields) Add(s Field) {
-	f[s.InstanceID()] = s
+func (f *Fields) Add(s Field) {
+	(*f)[s.InstanceID()] = s
 }
 
-func (f Fields) Update(s Field) {
-	f[s.InstanceID()] = s
+func (f *Fields) Update(s Field) {
+	(*f)[s.InstanceID()] = s
 }
 
-func (f Fields) Delete(id InstanceID) {
-	delete(f, id)
+func (f *Fields) Delete(id InstanceID) {
+	delete(*f, id)
 }
 
-func (f Fields) Field(id InstanceID) Field {
+func (f *Fields) Field(id InstanceID) Field {
 	//for _, v := range f {
 	//	if v.InstanceID() == id {
 	//		return v
 	//	}
 	//}
-	v, ok := f[id]
+	v, ok := (*f)[id]
 	if ok {
 		return v
 	}
 	return nil
 }
 
-func (f Fields) AppendSENML(dst []senml.Record) []senml.Record {
-	for _, v := range f {
+func (f *Fields) AppendSENML(dst []senml.Record) []senml.Record {
+	for _, v := range *f {
 		dst = v.AppendSENML(dst)
 	}
 
 	return dst
 }
 
-func (f Fields) MarshalJSON() ([]byte, error) {
+func (f *Fields) MarshalJSON() ([]byte, error) {
 	var pack senml.Pack
 	records := f.AppendSENML(nil)
 
 	if len(records) > 0 {
-		parent := f[0].Parent()
+		parent := (*f)[0].Parent()
 		bname := GenBaseName(parent)
 
 		records[0].BaseName = bname
