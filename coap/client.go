@@ -46,8 +46,6 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 			return nil, err
 		}
 
-		//dial.NetConn().SetReadDeadline()
-		//dial.NetConn().SetReadDeadline()
 		//err := c.delegate.Session().NetConn().(*piondtls.Conn).SetReadBuffer(c.readBufferSize)
 		//if err != nil {
 		//	log.Errorf("error set reader buffer size: %v", err)
@@ -85,7 +83,12 @@ func (s *coapClient) Send(req Request) (Response, error) {
 	defer cancel()
 
 	req.message().SetContext(ctx)
-	rsp, err := s.delegate.Do(req.message().Message)
+	msg := req.message().Message
+	rsp, err := s.delegate.Do(msg)
+
+	log.Tracef("make request to %v, req: %v, rsp: %v",
+		s.delegate.RemoteAddr(), msg, rsp)
+
 	return NewResponse(rsp), err
 }
 
@@ -98,7 +101,11 @@ func (s *coapClient) Notify(observationId string, data []byte) error {
 	m.SetContentFormat(message.TextPlain)
 	//m.SetObserve(uint32(obs))
 
-	return s.delegate.WriteMessage(m)
+	err := s.delegate.WriteMessage(m)
+	log.Tracef("notify %v of observation %s, msg: %v, err: %v",
+		s.delegate.RemoteAddr(), observationId, m, err)
+
+	return err
 }
 
 func (s *coapClient) Close() error {

@@ -187,6 +187,14 @@ func (p *peer) SetWriteBufferSize(size uint) {
 }
 
 func (p *peer) rrWrapper(fn PatternHandler, w mux.ResponseWriter, r *mux.Message) {
+	if r.Type() == message.Reset ||
+		r.Type() == message.Acknowledgement {
+		size, _ := r.BodySize()
+		if size == 0 { // filter out coap layer message
+			log.Tracef("ignore coap layer msg: %v", r.Message)
+		}
+	}
+
 	//wrap request received
 	req := NewRequest(r)
 	req.SetAddress(w.Conn().RemoteAddr())
@@ -195,10 +203,13 @@ func (p *peer) rrWrapper(fn PatternHandler, w mux.ResponseWriter, r *mux.Message
 	rsp := fn(req)
 
 	//write response to send
-	err := w.Conn().WriteMessage(rsp.message().Message)
+	msg := rsp.message().Message
+	err := w.Conn().WriteMessage(msg)
 	if err != nil {
 		log.Errorf("coap cannot write response: %v", err)
 	}
+
+	log.Tracef("send msg to %v, content: %v", w.Conn().RemoteAddr(), msg)
 }
 
 func (p *peer) regHandler(path string, h PatternHandler) error {

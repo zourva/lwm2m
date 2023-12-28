@@ -28,7 +28,7 @@ type Request interface {
 	IsCoRELinkContent() bool
 
 	// Timeout returns duration to elapse
-	// before make the request timeout.
+	// before making the request timeout.
 	Timeout() time.Duration
 	SetTimeout(to time.Duration)
 
