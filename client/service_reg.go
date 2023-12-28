@@ -337,9 +337,9 @@ func (r *Registrar) loadDTLSConfig(server *regServerInfo) (*piondtls.Config, err
 		if err != nil {
 			log.Errorf("load client key and certificate failed, err:%v", err)
 			return nil, err
-		} else {
-			log.Debugf("load client key and certificate certificate file successfully")
 		}
+
+		log.Debugf("load client key and certificate certificate file successfully")
 
 		var rootCertPool *x509.CertPool
 		if len(server.serverPublicKey) != 0 {
@@ -347,9 +347,9 @@ func (r *Registrar) loadDTLSConfig(server *regServerInfo) (*piondtls.Config, err
 			if err != nil {
 				log.Errorf("load root certificate failed, err:%v", err)
 				return nil, err
-			} else {
-				log.Debugf("load root certificate file successfully")
 			}
+
+			log.Debugf("load root certificate file successfully")
 		}
 
 		dtlsConf = &piondtls.Config{
@@ -375,7 +375,7 @@ func (r *Registrar) dial(server *regServerInfo) (*MessagerClient, error) {
 	var err error
 
 	if dtlsConf, err = r.loadDTLSConfig(server); err != nil {
-		log.Errorf("laod dtls config failed: %v", err)
+		log.Errorf("load dtls config failed: %v", err)
 		return nil, err
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/udp"
 	udpclt "github.com/plgd-dev/go-coap/v3/udp/client"
 	log "github.com/sirupsen/logrus"
+	gonet "net"
 )
 
 type Client interface {
@@ -47,12 +48,29 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 
 		//dial.NetConn().SetReadDeadline()
 		//dial.NetConn().SetReadDeadline()
+		//err := c.delegate.Session().NetConn().(*piondtls.Conn).SetReadBuffer(c.readBufferSize)
+		//if err != nil {
+		//	log.Errorf("error set reader buffer size: %v", err)
+		//	return nil, err
+		//}
 
 		c.delegate = dial
 	} else {
 		dial, err := udp.Dial(server)
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
+			return nil, err
+		}
+
+		err = c.delegate.Session().NetConn().(*gonet.UDPConn).SetWriteBuffer(c.writeBufferSize)
+		if err != nil {
+			log.Errorf("error set write buffer size: %v", err)
+			return nil, err
+		}
+
+		err = c.delegate.Session().NetConn().(*gonet.UDPConn).SetReadBuffer(c.readBufferSize)
+		if err != nil {
+			log.Errorf("error set read buffer size: %v", err)
 			return nil, err
 		}
 

@@ -13,6 +13,18 @@ import (
 
 type PeerOption func(peer Peer)
 
+func WithReadBufferSize(size uint) PeerOption {
+	return func(peer Peer) {
+		peer.SetReadBufferSize(size)
+	}
+}
+
+func WithWriteBufferSize(size uint) PeerOption {
+	return func(peer Peer) {
+		peer.SetWriteBufferSize(size)
+	}
+}
+
 func WithDTLSConfig(dtlsConf *piondtls.Config) PeerOption {
 	return func(peer Peer) {
 		peer.EnableDTLS(dtlsConf)
@@ -42,6 +54,9 @@ type Peer interface {
 	NewAckPiggybackedResponse(req Request, code Code, body []byte) Response
 
 	EnableDTLS(conf *piondtls.Config)
+
+	SetReadBufferSize(size uint)
+	SetWriteBufferSize(size uint)
 }
 
 func newPeer(router *Router) *peer {
@@ -54,6 +69,9 @@ func newPeer(router *Router) *peer {
 type peer struct {
 	//pool *pool.Pool
 	router *Router
+
+	readBufferSize  int
+	writeBufferSize int
 
 	dtlsOn   bool
 	dtlsConf *piondtls.Config
@@ -135,9 +153,11 @@ func (p *peer) NewAckPiggybackedResponse(req Request, code Code, body []byte) Re
 
 	if body != nil {
 		msg.SetBody(bytes.NewReader(body))
+		size, _ := msg.BodySize()
+		log.Tracef("new piggybacked ack: %v, Size: %d", msg, size)
+	} else {
+		log.Tracef("new ack: %v", msg)
 	}
-
-	log.Traceln("new response:", msg)
 
 	return NewResponse(msg)
 }
@@ -149,6 +169,21 @@ func (p *peer) EnableDTLS(conf *piondtls.Config) {
 
 	p.dtlsConf = conf
 	p.dtlsOn = true
+}
+
+func (p *peer) SetReadBufferSize(size uint) {
+	if size == 0 { // defaults to 2MB
+		size = 2 * 1024 * 1024
+	}
+	p.readBufferSize = int(size)
+}
+
+func (p *peer) SetWriteBufferSize(size uint) {
+	if size == 0 { // defaults to 2MB
+		size = 2 * 1024 * 1024
+	}
+
+	p.writeBufferSize = int(size)
 }
 
 func (p *peer) rrWrapper(fn PatternHandler, w mux.ResponseWriter, r *mux.Message) {

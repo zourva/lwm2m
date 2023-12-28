@@ -1,7 +1,6 @@
 package server
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/core"
 )
 
@@ -10,7 +9,7 @@ type ReportingServerDelegator struct {
 }
 
 func (r *ReportingServerDelegator) OnNotify(c core.RegisteredClient, value []byte) error {
-	log.Tracef("receive Notify operation data %d bytes", len(value))
+	//log.Tracef("receive Notify operation data %d bytes", len(value))
 
 	if r.server.reportService.Notify != nil {
 		_, err := r.server.reportService.Notify(c, value)
@@ -21,7 +20,7 @@ func (r *ReportingServerDelegator) OnNotify(c core.RegisteredClient, value []byt
 }
 
 func (r *ReportingServerDelegator) OnSend(c core.RegisteredClient, value []byte) ([]byte, error) {
-	log.Tracef("receive Send operation data %d bytes", len(value))
+	//log.Tracef("receive Send operation data %d bytes", len(value))
 
 	if r.server.reportService.Send != nil {
 		return r.server.reportService.Send(c, value)
