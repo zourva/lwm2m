@@ -36,9 +36,9 @@ type BootstrapService interface {
 }
 
 type RegistrationService interface {
-	Register(info *core.RegistrationInfo) ([]byte, error)
-	Update(info *core.RegistrationInfo) ([]byte, error)
-	Unregister(info *core.RegistrationInfo) ([]byte, error)
+	Register(info *core.RegistrationInfo) error
+	Update(info *core.RegistrationInfo) error
+	Unregister(info *core.RegistrationInfo)
 }
 
 type ReportingService interface {
