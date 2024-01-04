@@ -150,7 +150,7 @@ func (r *request) SetContentFormat(mt MediaType) {
 }
 
 func (r *request) SecurityIdentity() string {
-	id, ok := r.message().Context().Value(keyClientCertCommonName).(string)
+	id, ok := r.message().Context().Value(keyClientSecurityIdentity).(string)
 	if !ok {
 		return ""
 	}

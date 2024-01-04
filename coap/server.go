@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	keyClientCertCommonName = "CN"
+	keyClientSecurityIdentity = "securityId"
 )
 
 type Server interface {
@@ -81,19 +81,36 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 	return s
 }
 
+func (s *coapServer) saveDtlsData(cc *udpclt.Conn) {
+	dtlsConn, ok := cc.NetConn().(*piondtls.Conn)
+	if !ok {
+		return
+	}
+
+	state := dtlsConn.ConnectionState()
+	if state.PeerCertificates != nil {
+		// certificate mode
+		clientCert, err := x509.ParseCertificate(state.PeerCertificates[0])
+		if err == nil {
+			if len(clientCert.Subject.CommonName) != 0 {
+				cc.SetContextValue(keyClientSecurityIdentity, clientCert.Subject.CommonName)
+			}
+		}
+	} else {
+		// psk mode or raw public key mode
+		if state.IdentityHint != nil {
+			cc.SetContextValue(keyClientSecurityIdentity, state.IdentityHint)
+		}
+	}
+}
+
 func (s *coapServer) newConnCallback(cc *udpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
 
-	dtlsConn, ok := cc.NetConn().(*piondtls.Conn)
-	if ok {
-		//log.Fatalf("invalid type %T", cc.NetConn())
-		clientCert, err := x509.ParseCertificate(dtlsConn.ConnectionState().PeerCertificates[0])
-		if err == nil {
-			if len(clientCert.Subject.CommonName) != 0 {
-				cc.SetContextValue(keyClientCertCommonName, clientCert.Subject.CommonName)
-			}
-		}
+	if s.dtlsConf != nil {
+		// enabled dtls
+		s.saveDtlsData(cc)
 	}
 
 	cc.AddOnClose(func() {
