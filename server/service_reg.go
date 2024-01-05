@@ -27,8 +27,8 @@ func (s *RegisterServiceDelegator) OnRegister(info *RegistrationInfo) (string, e
 		return "", err
 	}
 
-	if s.server.registerService.Register != nil {
-		if _, err := s.server.registerService.Register(info); err != nil {
+	if s.server.registerService != nil {
+		if err := s.server.registerService.Register(info); err != nil {
 			return "", err
 		}
 	}
@@ -46,10 +46,27 @@ func (s *RegisterServiceDelegator) OnRegister(info *RegistrationInfo) (string, e
 }
 
 func (s *RegisterServiceDelegator) OnUpdate(info *RegistrationInfo) error {
+	if s.server.registerService != nil {
+		if err := s.server.registerService.Update(info); err != nil {
+			return err
+		}
+	}
+
 	return s.server.manager.Update(info)
+
+	// TODO: forward to application layer
 }
 
 func (s *RegisterServiceDelegator) OnDeregister(location string) {
+	found := s.server.manager.GetByLocation(location)
+	if found == nil {
+		return
+	}
+
+	if s.server.registerService != nil {
+		s.server.registerService.Unregister(found.RegistrationInfo())
+	}
+
 	s.server.manager.DeleteByLocation(location)
 }
 
