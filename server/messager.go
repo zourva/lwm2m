@@ -60,10 +60,11 @@ func (m *MessagerServer) Stop() {
 	log.Infoln("lwm2m messager stopped")
 }
 
-func (m *MessagerServer) checkClientBootstrapRequest(req coap.Request) error {
+func (m *MessagerServer) checkClientRequest(req coap.Request) error {
 	ep := req.Query("ep")
 	id := req.SecurityIdentity()
-	if len(ep) != 0 {
+
+	if m.lwM2MServer.dtlsConf != nil && len(ep) != 0 {
 		//If the OSCORE Sender ID is not set to Endpoint Client Name, then the LwM2M Server MUST compare the received
 		//Endpoint Client Name identifier with the OSCORE Sender ID of the LwM2M Client. This comparison may either be an
 		//equality match or may involve a dedicated lookup table to ensure that LwM2M Clients cannot intentionally or due to
@@ -89,7 +90,7 @@ func (m *MessagerServer) checkClientBootstrapRequest(req coap.Request) error {
 func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 	log.Debugf("receive Bootstrap-Request operation, size=%d bytes", req.Length())
 
-	if err := m.checkClientBootstrapRequest(req); err != nil {
+	if err := m.checkClientRequest(req); err != nil {
 		code := coap.CodeBadRequest
 		return m.NewAckResponse(req, code)
 	}
@@ -115,7 +116,7 @@ func (m *MessagerServer) onClientBootstrap(req coap.Request) coap.Response {
 func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 	log.Debugf("receive Bootstrap-Pack-Request operation, size=%d bytes", req.Length())
 
-	if err := m.checkClientBootstrapRequest(req); err != nil {
+	if err := m.checkClientRequest(req); err != nil {
 		code := coap.CodeBadRequest
 		return m.NewAckResponse(req, code)
 	}
@@ -141,6 +142,11 @@ func (m *MessagerServer) onClientBootstrapPack(req coap.Request) coap.Response {
 //	body: </1/0>,... which is optional.
 func (m *MessagerServer) onClientRegister(req coap.Request) coap.Response {
 	log.Debugf("receive Register operation, size=%d bytes", req.Length())
+
+	if err := m.checkClientRequest(req); err != nil {
+		code := coap.CodeBadRequest
+		return m.NewAckResponse(req, code)
+	}
 
 	//The Media-Type of the registration message, if used,
 	//MUST be the CoRE Link Format (application/link-format)
