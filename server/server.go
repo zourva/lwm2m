@@ -11,9 +11,9 @@ const (
 	defaultAddress = ":5683"
 )
 
-func New(name string, opts ...Option) *LwM2MServer {
+func New( /*name string,*/ opts ...Option) *LwM2MServer {
 	s := &LwM2MServer{
-		name: name,
+		//name: name,
 	}
 
 	for _, f := range opts {
@@ -39,7 +39,7 @@ func New(name string, opts ...Option) *LwM2MServer {
 }
 
 type LwM2MServer struct {
-	name     string
+	//name     string
 	network  string
 	address  string
 	registry ObjectRegistry

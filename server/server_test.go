@@ -7,8 +7,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	srv := New("Test Server",
-		WithRegistrationInfoStore(NewInMemorySessionStore()))
+	srv := New(WithRegistrationInfoStore(NewInMemorySessionStore()))
 
 	go srv.Serve()
 
