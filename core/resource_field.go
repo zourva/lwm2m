@@ -14,46 +14,43 @@ type Field interface {
 	InstanceID() InstanceID
 	Value
 
-	AppendSENML(dst []senml.Record) []senml.Record
-	MarshalJSON() ([]byte, error)
+	Senmler
+	Marshaler
 }
 
 var _ Field = &ResourceField{}
 
-type Fields map[InstanceID]Field
-
-func NewFields() Fields {
-	//return orderedmap.New[string, string]()
-	return make(Fields)
+type Fields struct {
+	parent ObjectInstance
+	fields map[InstanceID]Field
 }
 
-func (f *Fields) Add(s Field) {
-	(*f)[s.InstanceID()] = s
+func NewFields(parent ObjectInstance) *Fields {
+	return &Fields{
+		parent: parent,
+		fields: make(map[InstanceID]Field),
+	}
 }
 
-func (f *Fields) Update(s Field) {
-	(*f)[s.InstanceID()] = s
-}
-
-func (f *Fields) Delete(id InstanceID) {
-	delete(*f, id)
-}
-
+func (f *Fields) Add(s Field)          { f.fields[s.InstanceID()] = s }
+func (f *Fields) Update(s Field)       { f.fields[s.InstanceID()] = s }
+func (f *Fields) Delete(id InstanceID) { delete(f.fields, id) }
 func (f *Fields) Field(id InstanceID) Field {
-	//for _, v := range f {
-	//	if v.InstanceID() == id {
-	//		return v
-	//	}
-	//}
-	v, ok := (*f)[id]
-	if ok {
+	if v, ok := f.fields[id]; ok {
 		return v
 	}
 	return nil
 }
+func (f *Fields) SingleField() Field {
+	for _, v := range f.fields {
+		return v
+	}
+
+	return nil
+}
 
 func (f *Fields) AppendSENML(dst []senml.Record) []senml.Record {
-	for _, v := range *f {
+	for _, v := range f.fields {
 		dst = v.AppendSENML(dst)
 	}
 
@@ -65,8 +62,50 @@ func (f *Fields) MarshalJSON() ([]byte, error) {
 	records := f.AppendSENML(nil)
 
 	if len(records) > 0 {
-		parent := (*f)[0].Parent()
-		bname := GenBaseName(parent)
+		bname := GenBaseName(f.parent)
+		records[0].BaseName = bname
+	}
+
+	pack.Records = records
+	return senml.Encode(pack, senml.JSON)
+}
+
+type Resources struct {
+	parent ObjectInstance
+	fields map[ResourceID]*Fields
+}
+
+func NewResources(parent ObjectInstance) *Resources {
+	return &Resources{
+		parent: parent,
+		fields: make(map[ResourceID]*Fields),
+	}
+}
+
+func (r *Resources) Add(rid ResourceID, s *Fields)    { r.fields[rid] = s }
+func (r *Resources) Update(rid ResourceID, s *Fields) { r.fields[rid] = s }
+func (r *Resources) Delete(rid ResourceID)            { delete(r.fields, rid) }
+func (r *Resources) Fields(rid ResourceID) *Fields {
+	if v, ok := r.fields[rid]; ok {
+		return v
+	}
+	return nil
+}
+
+func (r *Resources) AppendSENML(dst []senml.Record) []senml.Record {
+	for _, v := range r.fields {
+		dst = v.AppendSENML(dst)
+	}
+
+	return dst
+}
+
+func (r *Resources) MarshalJSON() ([]byte, error) {
+	var pack senml.Pack
+	records := r.AppendSENML(nil)
+
+	if len(records) > 0 {
+		bname := GenBaseName(r.parent)
 
 		records[0].BaseName = bname
 	}
@@ -82,6 +121,14 @@ type ResourceField struct {
 	instanceId InstanceID
 	parent     ObjectInstance
 	value      Value
+}
+
+func (v *ResourceField) String() string {
+	dst, err := v.MarshalJSON()
+	if err != nil {
+		return ""
+	}
+	return string(dst)
 }
 
 func NewResourceField(id ResourceID, value Value) *ResourceField {
@@ -109,7 +156,7 @@ func (v *ResourceField) AppendSENML(dst []senml.Record) []senml.Record {
 		name = name + `/` + strconv.Itoa(int(instId))
 	}
 
-	r := fieldValueToSenmlRecord(v)
+	r := FieldValueToSenmlRecord(v)
 	r.Name = name
 
 	return append(dst, *r)

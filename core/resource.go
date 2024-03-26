@@ -159,11 +159,13 @@ const (
 	ConnectivityStatisticsCollectionPeriod   ResourceID = 8
 )
 
+type SecurityMode = int
+
 const (
-	SecurityModePreSharedKey = 0
-	SecurityModeRawPublicKey = 1
-	SecurityModeCertificate  = 2
-	SecurityModeNoSec        = 3
+	SecurityModePreSharedKey SecurityMode = iota
+	SecurityModeRawPublicKey
+	SecurityModeCertificate
+	SecurityModeNoSec
 )
 
 const (

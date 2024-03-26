@@ -123,8 +123,7 @@ func ParsePathToNumbers(src string, sep string) ([]uint16, error) {
 	return ids, nil
 }
 
-func fieldValueToSenmlRecord(src Field) *senml.Record {
-	r := &senml.Record{}
+func SenmlRecordSetFieldValue(r *senml.Record, src Field) {
 	kind := src.Class().Type()
 	switch kind {
 	case ValueTypeEmpty:
@@ -162,6 +161,12 @@ func fieldValueToSenmlRecord(src Field) *senml.Record {
 	case ValueTypeResource:
 	case ValueTypeMultiResource:
 	}
+	//return r
+}
+
+func FieldValueToSenmlRecord(src Field) *senml.Record {
+	r := &senml.Record{}
+	SenmlRecordSetFieldValue(r, src)
 	return r
 }
 

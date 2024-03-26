@@ -29,6 +29,12 @@ type DeviceControlServer interface {
 // DeviceControlClient defines client side operations
 // of the Device Management and Service Enablement Interface.
 type DeviceControlClient interface {
+	// OnPack implements Bootstrap-Pack operation
+	// method: POST
+	// path  : non
+	// see: 6.1.7.7. Bootstrap-Pack-Request Operation
+	OnPack(newValue []byte) error
+
 	// OnCreate implements Create operation
 	//  method: POST
 	//  format: LwM2M CBOR, SenML CBOR, SenML JSON, or TLV
@@ -83,4 +89,5 @@ type DeviceControlClient interface {
 	//OnReadComposite()
 	//OnWriteComposite()
 	//OnWriteAttributes()
+
 }

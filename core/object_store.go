@@ -36,7 +36,7 @@ type ObjectInstanceStore interface {
 
 	//GetInstanceManager returns the instance manager
 	//for the given object and create a new one if not found.
-	GetInstanceManager(id ObjectID) *InstanceManager
+	GetInstanceManager(id ObjectID) (*InstanceManager, error)
 	GetInstanceManagers() InstanceManagers
 	GetInstances(id ObjectID) InstanceMap
 
@@ -76,10 +76,42 @@ type InstanceStorageManager interface {
 	Flush() error
 }
 
+type StoreOption = func(o ObjectInstanceStore)
+
+func WithStorageManager(s InstanceStorageManager) StoreOption {
+	return func(o ObjectInstanceStore) {
+		o.SetStorageManager(s)
+	}
+}
+
+func WithOperators(s OperatorMap) StoreOption {
+	return func(o ObjectInstanceStore) {
+		o.SetOperators(s)
+	}
+}
+
+func WithOperator(id ObjectID, operator Operator) StoreOption {
+	return func(o ObjectInstanceStore) {
+		o.SetOperator(id, operator)
+	}
+}
+
+func WithEnableInstances(s InstanceIdsMap) StoreOption {
+	return func(o ObjectInstanceStore) {
+		o.EnableInstances(s)
+	}
+}
+
+func WithEnableInstance(oid ObjectID, ids ...InstanceID) StoreOption {
+	return func(o ObjectInstanceStore) {
+		o.EnableInstance(oid, ids...)
+	}
+}
+
 // NewObjectInstanceStore returns nil if neither a
 // storage manager nor an operators provider is valid.
 // If both are provided, provider is used first.
-func NewObjectInstanceStore(r ObjectRegistry) ObjectInstanceStore {
+func NewObjectInstanceStore(r ObjectRegistry, opts ...StoreOption) ObjectInstanceStore {
 	if r == nil {
 		log.Errorln("registry must not be nil")
 		return nil
@@ -90,6 +122,10 @@ func NewObjectInstanceStore(r ObjectRegistry) ObjectInstanceStore {
 		enabled:  make(InstanceIdsMap),
 		//operators: make(OperatorMap),
 		managers: make(map[ObjectID]*InstanceManager),
+	}
+
+	for _, fn := range opts {
+		fn(os)
 	}
 
 	return os
@@ -104,10 +140,7 @@ type objectInstanceStore struct {
 	storage InstanceStorageManager
 }
 
-func (s *objectInstanceStore) SetObjectRegistry(r ObjectRegistry) {
-	s.registry = r
-}
-
+func (s *objectInstanceStore) SetObjectRegistry(r ObjectRegistry) { s.registry = r }
 func (s *objectInstanceStore) SetStorageManager(m InstanceStorageManager) {
 	m.Bind(s)
 	s.storage = m
@@ -153,14 +186,22 @@ func (s *objectInstanceStore) StorageManager() InstanceStorageManager {
 	return s.storage
 }
 
-func (s *objectInstanceStore) GetInstanceManager(id ObjectID) *InstanceManager {
+func (s *objectInstanceStore) GetInstanceManager(id ObjectID) (*InstanceManager, error) {
 	im, ok := s.managers[id]
 	if !ok {
-		im = NewInstanceManager()
-		s.managers[id] = im
+		// 1. 确定是否允许创建
+		obj := s.registry.GetObject(id)
+		if obj != nil {
+			im = NewInstanceManager()
+			s.managers[id] = im
+		} else {
+			// 不支持的类型，不要创建
+			log.Errorf("unsupported create object(%d) from registry", id)
+			return nil, Forbidden
+		}
 	}
 
-	return im
+	return im, nil
 }
 
 func (s *objectInstanceStore) GetInstanceManagers() InstanceManagers {
@@ -305,10 +346,10 @@ func (i *InstanceManager) Get(id InstanceID) ObjectInstance {
 }
 
 func (i *InstanceManager) Upsert(object ObjectInstance) error {
-	if err := object.Construct(); err != nil {
-		log.Errorf("call ObjectInstance::Construct failed, %v", err)
-		return err
-	}
+	//if err := object.Construct(); err != nil {
+	//	log.Errorf("call ObjectInstance::Construct failed, %v", err)
+	//	return err
+	//}
 
 	i.instances[object.Id()] = object
 	return nil

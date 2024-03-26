@@ -1,15 +1,19 @@
 package client
 
 import (
+	jsoniter "github.com/json-iterator/go"
+	"github.com/knadh/koanf/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zourva/lwm2m/core"
 	"github.com/zourva/lwm2m/storage"
+	"github.com/zourva/pareto/config"
 	"github.com/zourva/pareto/endec/senml"
+	"strconv"
 	"testing"
 )
 
-func newEnabledOperators(db *storage.DBStorage) core.OperatorMap {
-	dbOp := storage.NewDBOperator(db)
+func newEnabledOperators(db *storage.Store) core.OperatorMap {
+	dbOp := storage.NewConfOperator(db)
 	enabledOperators := core.OperatorMap{
 		//core.OmaObjectSecurity:       &objects.SecurityDefaultOperator{},
 		//core.OmaObjectServer:         &objects.ServerDefaultOperator{},
@@ -29,16 +33,91 @@ func newEnabledOperators(db *storage.DBStorage) core.OperatorMap {
 		core.OmaObjectConnStats:      dbOp,
 		//n1.VehicleStatus:             nil,
 		//n1.UplinkTransferInfo:        core.NewBaseOperator(),
+		UplinkTransferInfo: core.NewBaseOperator(),
 	}
 	return enabledOperators
 }
 
-func TestOnCreate(t *testing.T) {
-	reg := core.NewObjectRegistry()
-	db := storage.NewDBStorage("conf.db")
-	if err := db.Open(); err != nil {
-		t.Fatalf("create lwm2m client failed")
+type ConfCenter struct {
+	//table map[string]string
+	store *config.Store
+	lwm2m *koanf.Koanf
+}
+
+func NewConfCenter() *ConfCenter {
+
+	store := config.New()
+	store.Load("test.db", config.Boltdb, config.Json)
+
+	return &ConfCenter{
+		//table: make(map[string]string)
+		store: store,
+		lwm2m: store.Cut("lwm2m"),
 	}
+}
+
+func (c *ConfCenter) toString(v any) (data string, err error) {
+	switch t := v.(type) {
+	case string:
+		data, err = t, nil
+	default:
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
+		tmp, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+
+		data = string(tmp)
+	}
+
+	return data, err
+}
+
+func (c *ConfCenter) Get(key string) (string, error) {
+	var data string
+	var err error
+
+	v := c.lwm2m.Get(key)
+
+	if v != nil {
+		data, err = c.toString(v)
+	} else {
+		data, err = "", core.NotFound
+	}
+
+	return data, err
+}
+
+func (c *ConfCenter) Set(key string, value string) error {
+	c.lwm2m.Set(key, string(value))
+
+	c.store.MergeAt(c.lwm2m, "lwm2m")
+
+	return nil
+}
+
+func (c *ConfCenter) All(key string) (map[string]string, error) {
+	all := c.lwm2m.Cut(key).All()
+
+	values := make(map[string]string)
+	for k, v := range all {
+		data, err := c.toString(v)
+		if err != nil {
+			return nil, err
+		}
+		values[k] = data
+	}
+	return values, nil
+}
+
+func (c *ConfCenter) Delete(key string) {
+	c.lwm2m.Delete(key)
+}
+
+func TestOnCreate(t *testing.T) {
+	conf := NewConfCenter()
+	reg := core.NewObjectRegistry()
+	db := storage.NewConfStorage(conf)
 
 	enabledOperators := newEnabledOperators(db)
 	store := core.NewObjectInstanceStore(reg)
@@ -48,9 +127,6 @@ func TestOnCreate(t *testing.T) {
 	c := &LwM2MClient{store: store}
 	d := &DeviceController{client: c}
 
-	if err := c.store.Load(); err != nil {
-		t.Fatalf("load object instances failed:%v", err)
-	}
 	create := func(oid uint16, value string) {
 		err := d.OnCreate(oid, []byte(value))
 		assert.Nil(t, err)
@@ -72,11 +148,27 @@ func TestOnCreate(t *testing.T) {
 	create(0, tests[3])
 	create(1, tests[4])
 	create(2, tests[5])
+
+	//json := jsoniter.ConfigCompatibleWithStandardLibrary
+	//data, _ := json.Marshal(conf.table)
+	//t.Logf("%s", data)
+
+	for k, v := range conf.store.All() {
+		switch vv := v.(type) {
+		case string:
+			t.Log(k, ":", vv)
+		default:
+			json := jsoniter.ConfigCompatibleWithStandardLibrary
+			data, _ := json.Marshal(v)
+			t.Log(k, ":", string(data))
+		}
+	}
 }
 
 func TestOnRead(t *testing.T) {
+	conf := NewConfCenter()
 	reg := core.NewObjectRegistry()
-	db := storage.NewDBStorage("conf.db")
+	db := storage.NewConfStorage(conf)
 	if err := db.Open(); err != nil {
 		t.Fatalf("create lwm2m client failed")
 	}
@@ -107,10 +199,37 @@ func TestOnRead(t *testing.T) {
 	read(2, 0, 2, 102)
 }
 
-func TestOnWrite(t *testing.T) {
+const (
+	VehicleStatus core.ObjectID = 30000 + iota
+	UplinkTransferInfo
+	//Nas
+)
 
-	reg := core.NewObjectRegistry()
-	db := storage.NewDBStorage("conf.db")
+var NasObjectDescriptor = `{
+      "Id": 30001,
+      "Name": "OBTS NAS",
+      "Multiple": false,
+      "Mandatory": true,
+      "Version": "1.0",
+      "LwM2MVersion": "1.1",
+      "URN": "urn:ibrifuture:obts:nas:30001:1.0",
+      "Resources": [
+        {
+          "Id": 0,
+          "Name": "NAS Object",
+          "Operations": "W",
+          "Multiple": false,
+          "Mandatory": false,
+          "ResourceType": "opaque"
+        }
+      ]
+    }
+`
+
+func TestOnWrite(t *testing.T) {
+	conf := NewConfCenter()
+	reg := core.NewObjectRegistry([]string{NasObjectDescriptor})
+	db := storage.NewConfStorage(conf)
 	if err := db.Open(); err != nil {
 		t.Fatalf("create lwm2m client failed")
 	}
@@ -148,20 +267,23 @@ func TestOnWrite(t *testing.T) {
 		`[{"bn":"/0/1/","n":"0","vs":"obts.ibrifuture.com:5684"}]`,
 		`[{"bn":"/1/0/","n":"0","v":102}]`,
 		`[{"bn":"/2/0/","n":"2/102","v":114}]`,
+		`[{"bn":"/` + strconv.Itoa(int(UplinkTransferInfo)) + `/0/", "n":"0", "vd":"this is a test msg, kkk" }]`,
 	}
 
 	//write(0, core.NoneID, core.NoneID, core.NoneID, tests[0])
 	//write(1, core.NoneID, core.NoneID, core.NoneID, tests[1])
 	//write(2, core.NoneID, core.NoneID, core.NoneID, tests[2])
 	//write(0, 1, core.NoneID, core.NoneID, tests[3])
-	write(0, 1, 0, core.NoneID, tests[4])
-	write(1, 0, 0, core.NoneID, tests[5])
-	write(2, 0, 2, 101, tests[6])
+	//write(0, 1, 0, core.NoneID, tests[4])
+	//write(1, 0, 0, core.NoneID, tests[5])
+	//write(2, 0, 2, 101, tests[6])
+	write(UplinkTransferInfo, 0, 0, core.NoneID, tests[7])
 }
 
 func TestOnDelete(t *testing.T) {
+	conf := NewConfCenter()
 	reg := core.NewObjectRegistry()
-	db := storage.NewDBStorage("conf.db")
+	db := storage.NewConfStorage(conf)
 	if err := db.Open(); err != nil {
 		t.Fatalf("create lwm2m client failed")
 	}

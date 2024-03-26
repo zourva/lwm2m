@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	"github.com/zourva/lwm2m/core"
@@ -34,6 +33,7 @@ type Bootstrapper struct {
 
 	bootSeverBootInfo *core.BootstrapServerBootstrapInfo
 	serverBootInfo    *core.ServerBootstrapInfo
+	serverInfo        *ServerInfo
 }
 
 // Request implements BootstrapRequest operation
@@ -92,23 +92,25 @@ func (r *Bootstrapper) PackRequest() error {
 	if rsp.Code().Content() {
 		log.Infof("bootstrap pack request done with %d bytes response", rsp.Length())
 
-		objs, err := core.ParseObjectInstancesWithJSON(r.client.store.ObjectRegistry(), string(rsp.Body()))
-		if err != nil {
-			log.Errorf("bootstrap pack parse object failed")
-			return fmt.Errorf("parse failed")
-		}
+		return r.client.controller.OnPack(rsp.Body())
 
-		for _, o := range objs {
-			// save register server
-			im := r.client.store.GetInstanceManager(o.Class().Id())
-			if err = im.Upsert(o); err != nil {
-				log.Errorf("bootstrap save pack response info failed, err:%v", err)
-				return err
-			}
-		}
-
-		// TODO: save cookies from server
-		return nil
+		//objs, err := core.ParseObjectInstancesWithJSON(r.client.store.ObjectRegistry(), string(rsp.Body()))
+		//if err != nil {
+		//	log.Errorf("bootstrap pack parse object failed")
+		//	return fmt.Errorf("parse failed")
+		//}
+		//
+		//for _, o := range objs {
+		//	// save register server
+		//	im := r.client.store.GetInstanceManager(o.Class().Id())
+		//	if err = im.Upsert(o); err != nil {
+		//		log.Errorf("bootstrap save pack response info failed, err:%v", err)
+		//		return err
+		//	}
+		//}
+		//
+		//// TODO: save cookies from server
+		//return nil
 	}
 
 	return errors.New(rsp.Code().String())
@@ -177,7 +179,21 @@ func (r *Bootstrapper) SetBootstrapServerBootstrapInfo(info *core.BootstrapServe
 
 var _ core.BootstrapClient = &Bootstrapper{}
 
-func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
+type BootstrapOption = func(b *Bootstrapper)
+
+func WithBootstrapInfo(i *core.BootstrapServerBootstrapInfo) BootstrapOption {
+	return func(b *Bootstrapper) {
+		b.SetBootstrapServerBootstrapInfo(i)
+	}
+}
+
+func WithServerInfo(s *ServerInfo) BootstrapOption {
+	return func(b *Bootstrapper) {
+		b.serverInfo = s
+	}
+}
+
+func NewBootstrapper(client *LwM2MClient, opts ...BootstrapOption) *Bootstrapper {
 	s := &Bootstrapper{
 		StateMachine: meta.NewStateMachine[state]("bootstrapper", time.Second),
 		client:       client,
@@ -191,6 +207,9 @@ func NewBootstrapper(client *LwM2MClient) *Bootstrapper {
 		{Name: exiting, Action: s.onExiting},
 	})
 
+	for _, fn := range opts {
+		fn(s)
+	}
 	return s
 }
 
@@ -213,7 +232,7 @@ func (r *Bootstrapper) Timeout() bool {
 }
 
 func (r *Bootstrapper) onInitiating(_ any) {
-	messager, err := coap.Dial(r.client.options.serverAddress[0], coap.WithDTLSConfig(r.client.options.dtlsConf))
+	messager, err := dial(r.client, r.serverInfo)
 	if err != nil {
 		log.Errorf("bootstrap dial failed: %v", err)
 		return

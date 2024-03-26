@@ -19,6 +19,7 @@ type Operator interface {
 	Add(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error
 	Update(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error
 	Get(inst ObjectInstance, rid ResourceID, riId InstanceID) (Field, error)
+	GetAll(inst ObjectInstance, rid ResourceID) (*Fields, error)
 	Delete(inst ObjectInstance, rid ResourceID, riId InstanceID) error
 	Execute(inst ObjectInstance, rid ResourceID, riId InstanceID) error
 }
@@ -57,6 +58,10 @@ func (b *BaseOperator) Update(inst ObjectInstance, rid ResourceID, riId Instance
 }
 
 func (b *BaseOperator) Get(inst ObjectInstance, rid ResourceID, riId InstanceID) (Field, error) {
+	return nil, ErrorNone
+}
+
+func (b *BaseOperator) GetAll(inst ObjectInstance, rid ResourceID) (*Fields, error) {
 	return nil, ErrorNone
 }
 

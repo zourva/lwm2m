@@ -50,33 +50,71 @@ func (d *DeviceController) preCheck(oid core.ObjectID, oiId core.InstanceID, rid
 	return core.ErrorNone
 }
 
-func (d *DeviceController) OnCreate(oid core.ObjectID, newValue []byte) error {
-	if oid == core.NoneID {
-		log.Errorf("create failed, the object id(%d) not specified", oid)
+// OnPack
+// The LwM2M client MUST delete the existing Objects and their Instances in the client with the Objects and their
+// Instances given in the "Bootstrap-Pack" if the Object IDs are the same. Object IDs available in the LwM2M Client which
+// are not provided in the "Bootstrap-Pack" MUST NOT be deleted. The two exceptions are the LwM2M Bootstrap-Server
+// Account, potentially including an associated Instance of an OSCORE Object ID:21, and the single Instance of the mandatory Device Object (ID:3), which are not affected by any Delete operation. Thus, when checking the configuration
+// consistency, the LwM2M Client MUST ensure that the LwM2M Bootstrap-Server Account is still present.
+func (d *DeviceController) OnPack(newValue []byte) error {
+	return core.ForeachSenmlJSON(string(newValue), func(oid, iid, rid, fid uint16, r *senml.Record) error {
+		mgr, err := d.client.store.GetInstanceManager(oid)
+		if err != nil {
+			return core.NotFound
+		}
+
+		instance := mgr.Get(iid)
+		if instance == nil {
+			instance, err = core.NewObjectInstance2(oid, iid, d.client.store.ObjectRegistry())
+			if err != nil {
+				log.Errorf("create object instance failed, %v", err)
+				return core.InternalServerError
+			}
+			_ = mgr.Upsert(instance)
+		}
+
+		res := instance.Class().Resource(rid)
+		val := core.SenmlRecordToFieldValue(res.Type(), r)
+		field := core.NewResourceField2(instance, fid, res, val)
+		instance.Class().Operator().Add(instance, rid, fid, field)
+		return nil
+	})
+}
+
+func (d *DeviceController) OnCreate(specifyOId core.ObjectID, newValue []byte) error {
+	if specifyOId == core.NoneID {
+		log.Errorf("create failed, the object id(%d) not specified", specifyOId)
 		return core.BadRequest
 	}
 
-	instances, err := core.ParseObjectInstancesWithJSON(d.client.store.ObjectRegistry(), string(newValue))
-	if err != nil {
-		log.Errorf("create failed, parse json failed, %s", err)
-		return core.BadRequest
-	}
-
-	mgr := d.client.store.GetInstanceManager(oid)
-	for _, inst := range instances {
-		if inst.Class().Id() != oid {
-			log.Errorf("create failed, the oid(%d) is not specialed", inst.Class().Id())
+	return core.ForeachSenmlJSON(string(newValue), func(oid, iid, rid, fid uint16, r *senml.Record) error {
+		if specifyOId != oid {
+			log.Errorf("create failed, the oid(%d) is not specialed(%d)", oid, specifyOId)
 			return core.BadRequest
 		}
 
-		err = mgr.Upsert(inst)
+		mgr, err := d.client.store.GetInstanceManager(oid)
 		if err != nil {
-			log.Errorf("create failed, %v", err)
-			return core.InternalServerError
+			return core.NotFound
 		}
-	}
 
-	return err
+		instance := mgr.Get(iid)
+		if instance == nil {
+			instance, err = core.NewObjectInstance2(oid, iid, d.client.store.ObjectRegistry())
+			if err != nil {
+				log.Errorf("create object instance failed, %v", err)
+				return core.InternalServerError
+			}
+
+			_ = mgr.Upsert(instance)
+		}
+
+		res := instance.Class().Resource(rid)
+		val := core.SenmlRecordToFieldValue(res.Type(), r)
+		field := core.NewResourceField2(instance, fid, res, val)
+		instance.Class().Operator().Add(instance, rid, fid, field)
+		return nil
+	})
 }
 
 func (d *DeviceController) errorConvert(value []byte, err error) ([]byte, error) {
@@ -92,28 +130,31 @@ func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, res
 		return nil, core.BadRequest
 	}
 
-	objs := d.client.store.GetInstanceManager(oid)
-	if objs != nil {
-		if instId == core.NoneID {
-			return d.errorConvert(objs.MarshalJSON())
+	objs, err := d.client.store.GetInstanceManager(oid)
+	if err != nil {
+		return nil, core.NotFound
+	}
+
+	if instId == core.NoneID {
+		return d.errorConvert(objs.MarshalJSON())
+	}
+
+	inst := objs.Get(instId)
+	if inst != nil {
+		if resId == core.NoneID {
+			return d.errorConvert(inst.MarshalJSON())
+		}
+		if resInstId == core.NoneID {
+			res, err := inst.Class().Operator().GetAll(inst, resId)
+			if err != nil {
+				return nil, err
+			}
+			return d.errorConvert(res.MarshalJSON())
 		}
 
-		inst := objs.Get(instId)
-		if inst != nil {
-			if resId == core.NoneID {
-				return d.errorConvert(inst.MarshalJSON())
-			}
-			res := inst.Fields(resId)
-			if res != nil {
-				if resInstId == core.NoneID {
-					return d.errorConvert(res.MarshalJSON())
-				}
-
-				field := res.Field(resInstId)
-				if field != nil {
-					return d.errorConvert(field.MarshalJSON())
-				}
-			}
+		field, err := inst.Class().Operator().Get(inst, resId, resInstId)
+		if err != nil {
+			return d.errorConvert(field.MarshalJSON())
 		}
 	}
 
@@ -126,10 +167,12 @@ func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, re
 		return core.BadRequest
 	}
 
-	var err error
-	var normalize senml.Pack
-	objmgr := d.client.store.GetInstanceManager(oid)
-	instance := objmgr.Get(instId)
+	objs, err := d.client.store.GetInstanceManager(oid)
+	if err != nil {
+		return core.NotFound
+	}
+
+	instance := objs.Get(instId)
 	if instance == nil {
 		instance, err = core.NewObjectInstance2(oid, instId, d.client.store.ObjectRegistry())
 		if err != nil {
@@ -138,48 +181,24 @@ func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, re
 		}
 	}
 
-	normalize, err = senml.DecodeAndNormalize(newValue, senml.JSON)
-	if err != nil {
-		log.Errorf("write failed: %v", err)
-		return core.BadRequest
-	}
-
-	var ids []uint16
-	for i := 0; i < len(normalize.Records); i++ {
-		r := &normalize.Records[i]
-		if ids, err = core.ParsePathToNumbers(r.Name, "/"); err != nil || len(ids) < 3 {
-			log.Errorf("write failed: invalid path:%s, err:%v", r.Name, err)
-			return core.BadRequest
-		}
-
-		xoid, xiid, xrid, xriid := ids[0], ids[1], ids[2], uint16(0)
-		if len(ids) > 3 {
-			xriid = ids[3]
-		}
-
-		if instance.Class().Id() != xoid || instance.Id() != xiid {
+	return core.ForeachSenmlJSON(string(newValue), func(oid, iid, rid, fid uint16, r *senml.Record) error {
+		if instance.Class().Id() != oid || instance.Id() != iid {
 			log.Errorf("write failed: multiple oids or iids specified")
 			return core.NotAcceptable
 		}
 
 		// add field
-		res := instance.Class().Resource(xrid)
+		res := instance.Class().Resource(rid)
 		if res.Operations()&core.OpWrite != core.OpWrite {
 			log.Errorf("write failed: %s", core.Forbidden)
 			return core.Forbidden
 		}
 
 		val := core.SenmlRecordToFieldValue(res.Type(), r)
-		field := core.NewResourceField2(instance, xriid, res, val)
-		instance.AddField(field)
-	}
-
-	err = objmgr.Upsert(instance)
-	if err != nil {
-		return err
-	}
-
-	return err
+		field := core.NewResourceField2(instance, fid, res, val)
+		instance.Class().Operator().Add(instance, rid, fid, field)
+		return nil
+	})
 }
 
 func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) error {
@@ -188,40 +207,28 @@ func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, r
 		return core.BadRequest
 	}
 
-	var err error
-	objmgr := d.client.store.GetInstanceManager(oid)
-	instance := objmgr.Get(instId)
+	objs, err := d.client.store.GetInstanceManager(oid)
+	if err != nil {
+		return core.NotFound
+	}
+
+	instance := objs.Get(instId)
 	if instance == nil {
 		log.Warnf("delete failed: not found")
 		return core.NotFound
 	}
 
-	if resId == core.NoneID || resInstId == core.NoneID {
-		err = objmgr.Delete(instId)
-		if err != nil {
-			log.Warnf("delete failed: %v", err)
-			return core.InternalServerError
-		}
-		log.Debugf("delete(%d,%d) successfully", oid, instId)
-	} else {
-		f := instance.Field(resId, resInstId)
-		if f == nil {
-			log.Warnf("delete failed: not found")
-			return core.NotFound
-		}
-
-		if (f.Class().Operations() & core.OpWrite) != core.OpWrite {
-			log.Warnf("delete failed: %v", core.Forbidden)
-			return core.Forbidden
-		}
-
-		instance.DelField(resId, resInstId)
-		if err = objmgr.Upsert(instance); err != nil {
-			return core.InternalServerError
-		}
-		log.Debugf("delete(%d,%d,%d,%d) successfully", oid, instId, resId, resInstId)
+	err = instance.Class().Operator().Delete(instance, resId, resInstId)
+	if err != nil {
+		log.Warnf("delete failed:%v", err)
+		return core.InternalServerError
 	}
 
+	if resId == core.NoneID || resInstId == core.NoneID {
+		_ = objs.Delete(instId)
+	}
+
+	log.Debugf("delete(%d,%d) successfully", oid, instId)
 	return err
 }
 
