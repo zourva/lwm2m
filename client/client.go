@@ -119,29 +119,108 @@ func (c *LwM2MClient) messager() *MessagerClient {
 func (c *LwM2MClient) hasRegistrationServer() bool {
 	instances := c.store.GetInstances(OmaObjectSecurity)
 	for _, instance := range instances {
-		for _, f := range instance.Fields(LwM2MSecurityBootstrapServer) {
-			if !f.Get().(bool) { // BootstrapServer == true
-				return true
-			}
+		//op := instance.Class().Operator()
+		//fields, err := op.GetAll(instance, LwM2MSecurityBootstrapServer)
+		//if err != nil {
+		//	continue
+		//}
+		//field := fields.SingleField()
+		//if !field.Get().(bool) { // BootstrapServer != true
+
+		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
+		if !isBootstrapServer { // BootstrapServer == true
+			return true
 		}
 	}
 	return false
 }
 
 // get bootstrap server account from store, if any
-func (c *LwM2MClient) getBootstrapServerAccount() *BootstrapServerAccount {
+func (c *LwM2MClient) getBootstrapInfos() (*BootstrapServerBootstrapInfo, *ServerInfo) {
 	instances := c.store.GetInstances(OmaObjectSecurity)
 	for _, instance := range instances {
-		for _, f := range instance.Fields(LwM2MSecurityBootstrapServer) {
-			if f.Get().(bool) { // BootstrapServer == true
-				return &BootstrapServerAccount{
+		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
+		if isBootstrapServer { // BootstrapServer == true
+			address := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
+
+			securityMode := FieldValue[int](instance, LwM2MSecuritySecurityMode)
+			publicKeyOrIdentity := FieldValue[[]byte](instance, LwM2MSecurityPublicKeyOrIdentity)
+			secretKey := FieldValue[[]byte](instance, LwM2MSecuritySecretKey)
+			serverPublicKey := FieldValue[[]byte](instance, LwM2MSecurityServerPublicKeyOrIdentity)
+
+			bootstrapInfo := &BootstrapServerBootstrapInfo{
+				BootstrapServerAccount: &BootstrapServerAccount{
 					SecurityObjectInstance: instance,
-				}
+				}}
+			serverInfo := &ServerInfo{
+				address:             address,
+				securityMode:        securityMode,
+				publicKeyOrIdentity: publicKeyOrIdentity,
+				serverPublicKey:     serverPublicKey,
+				secretKey:           secretKey,
+			}
+
+			return bootstrapInfo, serverInfo
+		}
+	}
+
+	return nil, nil
+}
+
+func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
+	var list []*regServerInfo
+	var ms = make(map[int]*regServerInfo)
+
+	// 在server列表中查找 Register server
+	instances := c.store.GetInstances(OmaObjectSecurity)
+	for _, instance := range instances {
+		// bootstrapServer is true, otherwise false
+		//instance.Class().Operator().Get(instance, LwM2MSecurityBootstrapServer, LwM2MSecurityLwM2MServerURI)
+		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
+		if !isBootstrapServer {
+			address := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
+			shortId := FieldValue[int](instance, LwM2MSecurityShortServerID)
+
+			securityMode := FieldValue[int](instance, LwM2MSecuritySecurityMode)
+			publicKeyOrIdentity := FieldValue[[]byte](instance, LwM2MSecurityPublicKeyOrIdentity)
+			secretKey := FieldValue[[]byte](instance, LwM2MSecuritySecretKey)
+			serverPublicKey := FieldValue[[]byte](instance, LwM2MSecurityServerPublicKeyOrIdentity)
+
+			ms[shortId] = &regServerInfo{
+				ServerInfo: ServerInfo{
+					address:             address,
+					securityMode:        securityMode,
+					publicKeyOrIdentity: publicKeyOrIdentity,
+					serverPublicKey:     serverPublicKey,
+					secretKey:           secretKey,
+				},
+				lifetime:          defaultLifetime,
+				blocking:          true,
+				bootstrap:         true,
+				priorityOrder:     1,
+				initRegDelay:      defInitRegistrationDelay,
+				commRetryLimit:    defCommRetryCount,
+				commRetryDelay:    defCommRetryTimer,
+				commSeqRetryDelay: defCommSeqDelayTimer,
+				commSeqRetryLimit: defCommSeqRetryCount,
 			}
 		}
 	}
 
-	return nil
+	// 在 Register server 列表中 获取 server 信息
+	//servers := c.store.GetInstances(OmaObjectServer)
+	//for _, server := range servers {
+	//	// TODO: retrieve from server
+	//	shortId := server.SingleField(LwM2MServerShortServerID).Get().(int)
+	//
+	//	if s, ok := ms[shortId]; ok {
+	//		lifetime := server.SingleField(LwM2MServerLifetime).Get().(int)
+	//		s.lifetime = uint64(lifetime)
+	//		list = append(list, s)
+	//	}
+	//}
+
+	return list
 }
 
 func (c *LwM2MClient) doBootstrap() {
@@ -151,13 +230,14 @@ func (c *LwM2MClient) doBootstrap() {
 
 	//c.messager().PauseUserPlane()
 
+	bootstrapInfo, serverInfo := c.getBootstrapInfos()
+
 	// always create a new bootstrapper
-	c.bootstrapper = NewBootstrapper(c)
-	c.bootstrapper.SetBootstrapServerBootstrapInfo(
-		&BootstrapServerBootstrapInfo{
-			BootstrapServerAccount: c.getBootstrapServerAccount(),
-		},
-	)
+	opts := []BootstrapOption{
+		WithBootstrapInfo(bootstrapInfo),
+		WithServerInfo(serverInfo),
+	}
+	c.bootstrapper = NewBootstrapper(c, opts...)
 	c.bootstrapper.Start()
 
 	c.machine.MoveToState(bootstrapping)
@@ -318,59 +398,6 @@ func (c *LwM2MClient) clearBootstrapPending() {
 
 func (c *LwM2MClient) clearRegisterPending() {
 	c.registerPending.Store(false)
-}
-
-func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
-	var list []*regServerInfo
-	var ms = make(map[int]*regServerInfo)
-
-	// 在server列表中查找 Register server
-	instances := c.store.GetInstances(OmaObjectSecurity)
-	for _, instance := range instances {
-		// bootstrapServer is true, otherwise false
-		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
-		if !isBootstrapServer {
-			address := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
-			shortId := FieldValue[int](instance, LwM2MSecurityShortServerID)
-
-			securityMode := FieldValue[int](instance, LwM2MSecuritySecurityMode)
-			publicKeyOrIdentity := FieldValue[[]byte](instance, LwM2MSecurityPublicKeyOrIdentity)
-			secretKey := FieldValue[[]byte](instance, LwM2MSecuritySecretKey)
-			serverPublicKey := FieldValue[[]byte](instance, LwM2MSecurityServerPublicKeyOrIdentity)
-
-			ms[shortId] = &regServerInfo{
-				lifetime:            defaultLifetime,
-				blocking:            true,
-				bootstrap:           true,
-				address:             address,
-				priorityOrder:       1,
-				initRegDelay:        defInitRegistrationDelay,
-				commRetryLimit:      defCommRetryCount,
-				commRetryDelay:      defCommRetryTimer,
-				commSeqRetryDelay:   defCommSeqDelayTimer,
-				commSeqRetryLimit:   defCommSeqRetryCount,
-				securityMode:        securityMode,
-				publicKeyOrIdentity: publicKeyOrIdentity,
-				serverPublicKey:     serverPublicKey,
-				secretKey:           secretKey,
-			}
-		}
-	}
-
-	// 在 Register server 列表中 获取 server 信息
-	servers := c.store.GetInstances(OmaObjectServer)
-	for _, server := range servers {
-		// TODO: retrieve from server
-		shortId := server.SingleField(LwM2MServerShortServerID).Get().(int)
-
-		if s, ok := ms[shortId]; ok {
-			lifetime := server.SingleField(LwM2MServerLifetime).Get().(int)
-			s.lifetime = uint64(lifetime)
-			list = append(list, s)
-		}
-	}
-
-	return list
 }
 
 // Start runs the client's state-driven loop.
