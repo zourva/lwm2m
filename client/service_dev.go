@@ -201,8 +201,7 @@ func (d *DeviceController) OnWrite(
 
 		val := core.SenmlRecordToFieldValue(res.Type(), r)
 		field := core.NewResourceField2(instance, fid, res, val)
-		instance.Class().Operator().Add(instance, rid, fid, field)
-		return nil
+		return instance.Class().Operator().Add(instance, rid, fid, field)
 	})
 }
 

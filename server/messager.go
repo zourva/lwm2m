@@ -42,7 +42,7 @@ func (m *MessagerServer) Start() {
 	_ = m.Server.Post("/bs", m.onClientBootstrap)         //POST
 	_ = m.Server.Get("/bspack", m.onClientBootstrapPack)  //GET
 	_ = m.Server.Post("/rd", m.onClientRegister)          //POST
-	_ = m.Server.Put("/rd/{id}", m.onClientUpdate)        //PUT
+	_ = m.Server.Post("/rd/{id}", m.onClientUpdate)       //POST
 	_ = m.Server.Delete("/rd/{id}", m.onClientDeregister) //DELETE
 	_ = m.Server.Post("/dp", m.onSendInfo)                //POST
 

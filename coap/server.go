@@ -3,6 +3,7 @@ package coap
 import (
 	"context"
 	"crypto/x509"
+	"fmt"
 	piondtls "github.com/pion/dtls/v2"
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/dtls/server"
@@ -139,7 +140,7 @@ func (s *coapServer) SendTo(addr string, req Request) (Response, error) {
 	c, ok := s.conns.Load(addr)
 	if !ok {
 		log.Errorf("remote peer address %s is not found", addr)
-		return nil, nil
+		return nil, fmt.Errorf("remote peer address %s is not found", addr)
 	}
 
 	cc := c.(*udpclt.Conn)
