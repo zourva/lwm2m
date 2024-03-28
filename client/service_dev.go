@@ -161,7 +161,12 @@ func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, res
 	return nil, core.NotFound
 }
 
-func (d *DeviceController) OnWrite(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID, newValue []byte) error {
+func (d *DeviceController) OnWrite(
+	oid core.ObjectID,
+	instId core.InstanceID,
+	resId core.ResourceID,
+	resInstId core.InstanceID,
+	newValue []byte) error {
 	if oid == core.NoneID || instId == core.NoneID {
 		log.Errorf("write failed, invalid object id(%d) or instance id(%d)", oid, instId)
 		return core.BadRequest

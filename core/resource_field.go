@@ -194,11 +194,11 @@ func (v *ResourceField) ToBytes() []byte {
 }
 
 func (v *ResourceField) ContainedType() ValueType {
-	return ValueTypeResource
+	return v.value.ContainedType()
 }
 
 func (v *ResourceField) Type() ValueType {
-	return ValueTypeResource
+	return v.value.Type()
 }
 
 func (v *ResourceField) ToString() string {
