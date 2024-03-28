@@ -65,11 +65,17 @@ func (m *MessagerClient) Close() error {
 
 func (m *MessagerClient) Dial(addr string, opts ...coap.PeerOption) error {
 	log.Debugf("dial new connection(to:%s)...", addr)
+
+	//router := m.initRouter()
+
+	//opts = append(opts, coap.WithRouter(router))
 	cli, err := coap.Dial(addr, opts...)
 	if err != nil {
 		return err
 	}
+
 	m.Client = cli
+
 	return nil
 }
 
@@ -106,6 +112,8 @@ func (m *MessagerClient) Start() {
 	//s.OnError(func(err error) {
 	//	log.Errorln("err received:", err)
 	//})
+	router := m.Router()
+	router.Use(m.logInterceptor)
 
 	// for device control interface methods
 	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerRead)
@@ -297,6 +305,13 @@ func (m *MessagerClient) Connected() bool {
 	return m.state == connected
 }
 
+func (m *MessagerClient) logInterceptor(next coap.Interceptor) coap.Interceptor {
+	return coap.Handler(func(w coap.ResponseWriter, r *coap.Message) {
+		log.Tracef("recv msg from %v, content: %v", w.Conn().RemoteAddr(), r.String())
+		next.ServeCOAP(w, r)
+	})
+}
+
 func (m *MessagerClient) Register(info *regInfo) error {
 	// send request
 	req := m.NewPostRequestCoReLink(RegisterUri, []byte(info.objects))
@@ -344,7 +359,7 @@ func (m *MessagerClient) Update(info *regInfo, params ...string) error {
 	}
 
 	// check response code
-	if rsp.Code().Changed() {
+	if len(params) == 0 || rsp.Code().Changed() {
 		log.Infoln("update done on", uri)
 		return nil
 	}

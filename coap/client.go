@@ -6,6 +6,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
+	"github.com/plgd-dev/go-coap/v3/options"
 	"github.com/plgd-dev/go-coap/v3/udp"
 	udpclt "github.com/plgd-dev/go-coap/v3/udp/client"
 	log "github.com/sirupsen/logrus"
@@ -40,7 +41,7 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 	}
 
 	if c.dtlsOn {
-		dial, err := dtls.Dial(server, c.dtlsConf)
+		dial, err := dtls.Dial(server, c.dtlsConf, options.WithMux(c.Router()))
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
 			return nil, err
@@ -54,7 +55,7 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 
 		c.delegate = dial
 	} else {
-		dial, err := udp.Dial(server)
+		dial, err := udp.Dial(server, options.WithMux(c.Router()))
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
 			return nil, err

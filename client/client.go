@@ -208,17 +208,17 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 	}
 
 	// 在 Register server 列表中 获取 server 信息
-	//servers := c.store.GetInstances(OmaObjectServer)
-	//for _, server := range servers {
-	//	// TODO: retrieve from server
-	//	shortId := server.SingleField(LwM2MServerShortServerID).Get().(int)
-	//
-	//	if s, ok := ms[shortId]; ok {
-	//		lifetime := server.SingleField(LwM2MServerLifetime).Get().(int)
-	//		s.lifetime = uint64(lifetime)
-	//		list = append(list, s)
-	//	}
-	//}
+	servers := c.store.GetInstances(OmaObjectServer)
+	for _, server := range servers {
+		// TODO: retrieve from server
+		shortId := FieldValue[int](server, LwM2MServerShortServerID)
+
+		if s, ok := ms[shortId]; ok {
+			lifetime := FieldValue[int](server, LwM2MServerLifetime)
+			s.lifetime = uint64(lifetime)
+			list = append(list, s)
+		}
+	}
 
 	return list
 }
@@ -251,7 +251,10 @@ func (c *LwM2MClient) doRegister() {
 	//c.resetReportFailCounter()
 	//c.messager().PauseUserPlane()
 
-	// always create a new bootstrapper
+	// always create a new registrar
+	if c.registrar != nil {
+		c.registrar.Stop()
+	}
 	c.registrar = NewRegistrar(c)
 	c.registrar.Start()
 
@@ -295,7 +298,7 @@ func (c *LwM2MClient) onRegistering(_ any) {
 		log.Infoln("client registered")
 		c.evtMgr.EmitEvent(EventClientRegistered)
 		// registrar is long-running, so not stopped
-		c.registrar.Stop()
+		//c.registrar.Stop()
 		c.enableService()
 	} else {
 		//restart registration if timeout
@@ -351,9 +354,9 @@ func (c *LwM2MClient) makeDefaults() {
 		c.options.registry = NewObjectRegistry()
 	}
 
-	if len(c.options.serverAddress) == 0 {
-		c.options.serverAddress[0] = defaultServerAddr
-	}
+	//if len(c.options.serverAddress) == 0 {
+	//	c.options.serverAddress[0] = defaultServerAddr
+	//}
 
 	if len(c.options.localAddress) == 0 {
 		c.options.localAddress = ":0"
