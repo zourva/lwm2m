@@ -31,6 +31,12 @@ func WithDTLSConfig(dtlsConf *piondtls.Config) PeerOption {
 	}
 }
 
+//func WithRouter(router *Router) PeerOption {
+//	return func(peer Peer) {
+//		peer.SetRouter(router)
+//	}
+//}
+
 // Peer defines a LwM2M peer which
 // may be run as a server or a client or both.
 type Peer interface {
@@ -146,9 +152,9 @@ func (p *peer) NewAckResponse(req Request, code Code) Response {
 // NewAckPiggybackedResponse creates an ACK-piggybacked response.
 func (p *peer) NewAckPiggybackedResponse(req Request, code Code, body []byte) Response {
 	msg := pool.NewMessage(req.message().Context())
-	msg.SetType(message.Acknowledgement)
+	//msg.SetType(message.Acknowledgement)
 	msg.SetCode(codes.Code(code))
-	msg.SetMessageID(req.message().MessageID())
+	//msg.SetMessageID(req.message().MessageID())
 	msg.SetToken(req.message().Token())
 
 	if body != nil {
@@ -212,32 +218,38 @@ func (p *peer) rrWrapper(fn PatternHandler, w mux.ResponseWriter, r *mux.Message
 	log.Tracef("send msg to %v, content: %v", w.Conn().RemoteAddr(), msg)
 }
 
-func (p *peer) regHandler(path string, h PatternHandler) error {
-	return p.router.Handle(path, mux.HandlerFunc(func(w mux.ResponseWriter, r *mux.Message) {
+func (p *peer) regHandler(method codes.Code, path string, h PatternHandler) error {
+	if p.router == nil {
+		panic("router is nil, set router please!")
+	}
+
+	return p.router.Handle(method, path, func(w mux.ResponseWriter, r *mux.Message) {
 		p.rrWrapper(h, w, r)
-	}))
+	})
 }
 
 func (p *peer) Get(path string, h PatternHandler) error {
-	return p.regHandler(path, h)
+	return p.regHandler(codes.GET, path, h)
 }
 
 func (p *peer) Delete(path string, h PatternHandler) error {
-	return p.regHandler(path, h)
+	return p.regHandler(codes.DELETE, path, h)
 }
 
 func (p *peer) Put(path string, h PatternHandler) error {
-	return p.regHandler(path, h)
+	return p.regHandler(codes.PUT, path, h)
 }
 
 func (p *peer) Post(path string, h PatternHandler) error {
-	return p.regHandler(path, h)
+	return p.regHandler(codes.POST, path, h)
 }
 
 func (p *peer) Options(path string, h PatternHandler) error {
-	return p.regHandler(path, h)
+	panic("unsupported OPTIONS")
+	//return p.regHandler(path, h)
 }
 
 func (p *peer) Patch(path string, h PatternHandler) error {
-	return p.regHandler(path, h)
+	panic("unsupported PATCH")
+	//return p.regHandler(codes.PATCH, path, h)
 }
