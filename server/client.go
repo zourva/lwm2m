@@ -107,7 +107,7 @@ func (c *registeredClient) Read(oid ObjectID, oiId InstanceID, rid ResourceID, r
 	return c.server.messager.Read(c.Address(), oid, oiId, rid, riId)
 }
 
-func (c *registeredClient) Write(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) error {
+func (c *registeredClient) Write(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, newValue Value) ([]byte, error) {
 	return c.server.messager.Write(c.Address(), oid, oiId, rid, riId, newValue)
 }
 

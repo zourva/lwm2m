@@ -279,9 +279,14 @@ func (m *MessagerClient) onServerWrite(req coap.Request) coap.Response {
 	riId := m.getRIId(req)
 
 	value := req.Body()
-	err := m.devController().OnWrite(oid, oiId, rid, riId, value)
+	rsp, err := m.devController().OnWrite(oid, oiId, rid, riId, value)
 
-	return m.NewAckResponse(req, GetErrorCode(err))
+	code := coap.CodeChanged
+	if err != nil {
+		code = GetErrorCode(err)
+	}
+
+	return m.NewAckPiggybackedResponse(req, code, rsp)
 }
 
 func (m *MessagerClient) onServerExecute(req coap.Request) coap.Response {

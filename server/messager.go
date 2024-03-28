@@ -289,7 +289,8 @@ func (m *MessagerServer) BootstrapDiscover(peer string, oid ObjectID) ([]*coap.C
 }
 
 func (m *MessagerServer) BootstrapWrite(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, value Value) error {
-	return m.Write(peer, oid, oiId, rid, NoneID, value)
+	_, err := m.Write(peer, oid, oiId, rid, NoneID, value)
+	return err
 }
 
 func (m *MessagerServer) BootstrapDelete(peer string, oid ObjectID, oiId InstanceID) error {
@@ -410,27 +411,50 @@ func (m *MessagerServer) makeSenmlBody(oid ObjectID, oiId InstanceID, rid Resour
 	return nil, err
 }
 
-func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, value Value) error {
+func (m *MessagerServer) unpackSenmlBody(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, body []byte) ([]byte, error) {
+	pack, err := senml.Decode(body, senml.JSON)
+	if err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("/%d/%d/%d/%d", oid, oiId, rid, riId)
+
+	for _, r := range pack.Records {
+		if r.Name == name {
+			if r.OpaqueValue != nil {
+				return Opaque([]byte(*r.OpaqueValue)).ToBytes(), nil
+			} else if r.Value != nil {
+				return Float64(*r.Value).ToBytes(), nil
+			} else if r.StringValue != nil {
+				return String(*r.StringValue).ToBytes(), nil
+			} else if r.BoolValue != nil {
+				return Boolean(*r.BoolValue).ToBytes(), nil
+			}
+		}
+	}
+	return nil, nil // no ack
+}
+
+func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, value Value) ([]byte, error) {
 	uri := m.makeAccessPath(oid, oiId, rid, riId)
 	body, err := m.makeSenmlBody(oid, oiId, rid, riId, value)
 	if err != nil {
 		log.Errorln("make m2m msg failed:", err)
-		return err
+		return nil, err
 	}
 	req := m.NewPutRequestPlain(uri, body)
 	rsp, err := m.SendTo(peer, req)
 	if err != nil {
 		log.Errorln("write operation failed:", err)
-		return err
+		return nil, err
 	}
 
 	// check response code
 	if rsp.Code().Changed() {
 		log.Debugf("write operation against %s done", uri)
-		return nil
+		return m.unpackSenmlBody(oid, oiId, rid, riId, rsp.Body())
 	}
 
-	return GetCodeError(rsp.Code())
+	return nil, GetCodeError(rsp.Code())
 }
 
 func (m *MessagerServer) Execute(peer string, oid ObjectID, id InstanceID, rid ResourceID, args string) error {

@@ -76,8 +76,8 @@ func (d *DeviceController) OnPack(newValue []byte) error {
 		res := instance.Class().Resource(rid)
 		val := core.SenmlRecordToFieldValue(res.Type(), r)
 		field := core.NewResourceField2(instance, fid, res, val)
-		instance.Class().Operator().Add(instance, rid, fid, field)
-		return nil
+		_, err = instance.Class().Operator().Add(instance, rid, fid, field)
+		return err
 	})
 }
 
@@ -112,8 +112,8 @@ func (d *DeviceController) OnCreate(specifyOId core.ObjectID, newValue []byte) e
 		res := instance.Class().Resource(rid)
 		val := core.SenmlRecordToFieldValue(res.Type(), r)
 		field := core.NewResourceField2(instance, fid, res, val)
-		instance.Class().Operator().Add(instance, rid, fid, field)
-		return nil
+		_, err = instance.Class().Operator().Add(instance, rid, fid, field)
+		return err
 	})
 }
 
@@ -166,15 +166,15 @@ func (d *DeviceController) OnWrite(
 	instId core.InstanceID,
 	resId core.ResourceID,
 	resInstId core.InstanceID,
-	newValue []byte) error {
+	newValue []byte) ([]byte, error) {
 	if oid == core.NoneID || instId == core.NoneID {
 		log.Errorf("write failed, invalid object id(%d) or instance id(%d)", oid, instId)
-		return core.BadRequest
+		return nil, core.BadRequest
 	}
 
 	objs, err := d.client.store.GetInstanceManager(oid)
 	if err != nil {
-		return core.NotFound
+		return nil, core.NotFound
 	}
 
 	instance := objs.Get(instId)
@@ -182,11 +182,13 @@ func (d *DeviceController) OnWrite(
 		instance, err = core.NewObjectInstance2(oid, instId, d.client.store.ObjectRegistry())
 		if err != nil {
 			log.Errorf("write failed: %v", err)
-			return core.NotImplemented
+			return nil, core.NotImplemented
 		}
 	}
 
-	return core.ForeachSenmlJSON(string(newValue), func(oid, iid, rid, fid uint16, r *senml.Record) error {
+	pack := senml.Pack{}
+
+	err = core.ForeachSenmlJSON(string(newValue), func(oid, iid, rid, riId uint16, r *senml.Record) error {
 		if instance.Class().Id() != oid || instance.Id() != iid {
 			log.Errorf("write failed: multiple oids or iids specified")
 			return core.NotAcceptable
@@ -200,9 +202,37 @@ func (d *DeviceController) OnWrite(
 		}
 
 		val := core.SenmlRecordToFieldValue(res.Type(), r)
-		field := core.NewResourceField2(instance, fid, res, val)
-		return instance.Class().Operator().Add(instance, rid, fid, field)
+		field := core.NewResourceField2(instance, riId, res, val)
+		rsp, err := instance.Class().Operator().Add(instance, rid, riId, field)
+
+		if err != nil {
+			return err
+		}
+
+		d.appendSenmlRecord(&pack, oid, iid, rid, riId, core.Opaque(rsp))
+
+		return nil
 	})
+
+	data, err1 := senml.Encode(pack, senml.JSON)
+	if err1 != nil {
+		return nil, core.InternalServerError
+	}
+
+	return data, err
+}
+
+func (m *DeviceController) appendSenmlRecord(pack *senml.Pack,
+	oid core.ObjectID,
+	oiId core.InstanceID,
+	rid core.ResourceID,
+	riId core.InstanceID,
+	value core.Value) {
+	idx := len(pack.Records)
+	pack.Records = append(pack.Records, senml.Record{})
+	record := &pack.Records[idx]
+	core.SenmlRecordSetFieldValue(record, value)
+	record.Name = fmt.Sprintf("/%d/%d/%d/%d", oid, oiId, rid, riId)
 }
 
 func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) error {

@@ -16,7 +16,7 @@ const (
 
 	// 2.xx
 
-	CodeEmpty    Code = 0
+	CodeEmpty    Code = 0  // 2.00
 	CodeCreated  Code = 65 // 2.01
 	CodeDeleted  Code = 66 // 2.02
 	CodeValid    Code = 67 // 2.03

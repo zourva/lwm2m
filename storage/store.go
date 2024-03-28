@@ -299,14 +299,16 @@ func (o *StoreOperator) Destruct(inst ObjectInstance) error {
 	return o.storage.DeleteInstanceResources(inst)
 }
 
-func (o *StoreOperator) Add(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error {
+func (o *StoreOperator) Add(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) ([]byte, error) {
 	inst.Helper().AddField(field)
 
-	return o.storage.InsertResourceInstance(inst, rid, riId, field)
+	err := o.storage.InsertResourceInstance(inst, rid, riId, field)
+	return nil, err
 }
 
-func (o *StoreOperator) Update(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) error {
-	return o.storage.UpdateResourceInstance()
+func (o *StoreOperator) Update(inst ObjectInstance, rid ResourceID, riId InstanceID, field Field) ([]byte, error) {
+	err := o.storage.UpdateResourceInstance()
+	return nil, err
 }
 
 func (o *StoreOperator) GetAll(inst ObjectInstance, rid ResourceID) (*Fields, error) {
