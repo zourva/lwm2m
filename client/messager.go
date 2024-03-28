@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
@@ -116,22 +115,22 @@ func (m *MessagerClient) Start() {
 	router.Use(m.logInterceptor)
 
 	// for device control interface methods
-	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerRead)
-	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerRead)
-	m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerRead)
-	m.Get("/{oid:[0-9]+}", m.onServerRead)
+	_ = m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerRead)
+	_ = m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerRead)
+	_ = m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerRead)
+	_ = m.Get("/{oid:[0-9]+}", m.onServerRead)
 
-	m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerWrite)
-	m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerWrite)
-	m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerWrite)
+	_ = m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerWrite)
+	_ = m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerWrite)
+	_ = m.Put("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerWrite)
 
-	m.Delete("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerDelete)
-	m.Delete("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerDelete)
+	_ = m.Delete("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerDelete)
+	_ = m.Delete("/{oid:[0-9]+}/{oiid:[0-9]+}", m.onServerDelete)
 
-	m.Post("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerExecute)
-	m.Post("/{oid:[0-9]+}", m.onServerCreate)
+	_ = m.Post("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}", m.onServerExecute)
+	_ = m.Post("/{oid:[0-9]+}", m.onServerCreate)
 
-	m.Post("/bs", m.onBootstrapFinish)
+	_ = m.Post("/bs", m.onBootstrapFinish)
 }
 
 // PauseUserPlane stops accepting requests from servers.
@@ -341,7 +340,8 @@ func (m *MessagerClient) Register(info *regInfo) error {
 }
 
 func (m *MessagerClient) Update(info *regInfo, params ...string) error {
-	uri := RegisterUri + fmt.Sprintf("/%s", info.location)
+	//uri := RegisterUri + fmt.Sprintf("%s", info.location)
+	uri := info.location
 	req := m.NewPostRequestCoReLink(uri, nil)
 
 	for _, param := range params {
@@ -370,7 +370,8 @@ func (m *MessagerClient) Update(info *regInfo, params ...string) error {
 }
 
 func (m *MessagerClient) Deregister(info *regInfo) error {
-	uri := RegisterUri + fmt.Sprintf("/%s", info.location)
+	//uri := RegisterUri + fmt.Sprintf("%s", info.location)
+	uri := info.location
 	req := m.NewDeleteRequestPlain(uri)
 	rsp, err := m.Send(req)
 	if err != nil {

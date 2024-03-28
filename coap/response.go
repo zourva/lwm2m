@@ -1,6 +1,9 @@
 package coap
 
-import "github.com/plgd-dev/go-coap/v3/message/pool"
+import (
+	"github.com/plgd-dev/go-coap/v3/message"
+	"github.com/plgd-dev/go-coap/v3/message/pool"
+)
 
 type Response interface {
 	// Code returns response code
@@ -61,9 +64,11 @@ func (r *response) LocationPath() string {
 }
 
 func (r *response) SetLocationPath(s string) {
-	var buf []byte
-	_, _, err := r.msg.Options().SetLocationPath(buf, s)
-	if err != nil {
-		return
-	}
+	r.msg.SetOptionString(message.LocationPath, s)
+
+	//buf := make([]byte, 1024)
+	//_, _, err := r.msg.Options().SetLocationPath(buf, s)
+	//if err != nil {
+	//	return
+	//}
 }
