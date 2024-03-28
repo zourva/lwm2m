@@ -393,14 +393,17 @@ func (m *MessagerServer) Discover(peer string, oid ObjectID, oiId InstanceID, ri
 	panic("implement me")
 }
 
-func (m *MessagerServer) makeSenmlBody(value Value) ([]byte, error) {
-	record := FieldValueToSenmlRecord(value)
+func (m *MessagerServer) makeSenmlBody(oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, value Value) ([]byte, error) {
 	pack := senml.Pack{
-		Records: []senml.Record{*record},
+		Records: make([]senml.Record, 1),
 	}
 
+	record := &pack.Records[0]
+	SenmlRecordSetFieldValue(record, value)
+	record.Name = fmt.Sprintf("/%d/%d/%d/%d", oid, oiId, rid, riId)
+
 	data, err := senml.Encode(pack, senml.JSON)
-	if err != nil {
+	if err == nil {
 		return data, nil
 	}
 
@@ -409,7 +412,7 @@ func (m *MessagerServer) makeSenmlBody(value Value) ([]byte, error) {
 
 func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, value Value) error {
 	uri := m.makeAccessPath(oid, oiId, rid, riId)
-	body, err := m.makeSenmlBody(value)
+	body, err := m.makeSenmlBody(oid, oiId, rid, riId, value)
 	if err != nil {
 		log.Errorln("make m2m msg failed:", err)
 		return err
