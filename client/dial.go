@@ -40,7 +40,29 @@ type ServerInfo struct {
 	secretKey []byte
 }
 
-func loadDTLSConfig(server *ServerInfo) (*piondtls.Config, error) {
+func checkCommonName(name string, cert *tls.Certificate) error {
+	var commonName string
+	if cert.Leaf == nil {
+		if leaf, err := x509.ParseCertificate(cert.Certificate[0]); err != nil {
+			log.Errorf("x509 parser certificate failed, err:%v", err)
+			return err
+		} else {
+			commonName = leaf.Subject.CommonName
+		}
+	} else {
+		commonName = cert.Leaf.Subject.CommonName
+	}
+
+	if commonName != name {
+		err := fmt.Errorf("the Common Name(%s) in the client certificate does not match the device name(%s)",
+			commonName, name)
+		log.Errorf("%v", err)
+		return err
+	}
+	return nil
+}
+
+func loadDTLSConfig(client *LwM2MClient, server *ServerInfo) (*piondtls.Config, error) {
 	var dtlsConf *piondtls.Config
 
 	switch server.securityMode {
@@ -48,6 +70,10 @@ func loadDTLSConfig(server *ServerInfo) (*piondtls.Config, error) {
 		cert, err := cipher.LoadKeyAndCertificate(server.secretKey, server.publicKeyOrIdentity)
 		if err != nil {
 			log.Errorf("load client key and certificate failed, err:%v", err)
+			return nil, err
+		}
+
+		if err = checkCommonName(client.name, cert); err != nil {
 			return nil, err
 		}
 
@@ -86,7 +112,7 @@ func dial(client *LwM2MClient, server *ServerInfo) (*MessagerClient, error) {
 	var dtlsConf *piondtls.Config
 	var err error
 
-	if dtlsConf, err = loadDTLSConfig(server); err != nil {
+	if dtlsConf, err = loadDTLSConfig(client, server); err != nil {
 		log.Errorf("load dtls config failed: %v", err)
 		return nil, err
 	}
