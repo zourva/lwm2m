@@ -1,9 +1,7 @@
 package client
 
 import (
-	piondtls "github.com/pion/dtls/v2"
 	"github.com/zourva/lwm2m/core"
-	"strings"
 	"time"
 )
 
@@ -38,8 +36,9 @@ type Options struct {
 	store    core.ObjectInstanceStore
 	//provider      OperatorProvider
 	//storage       InstanceStorageManager
-	serverAddress []string
-	localAddress  string
+
+	//serverAddress []string
+	localAddress string
 	//dtlsConf      *piondtls.Config
 
 	// request timeout
@@ -49,7 +48,7 @@ type Options struct {
 	// dtlsConf
 	// - nil  : disable dtls
 	// - !nil : enable dtls
-	dtlsConf *piondtls.Config
+	//dtlsConf *piondtls.Config
 }
 
 type Option func(*Options)
@@ -69,14 +68,14 @@ func WithLocalAddress(local string) Option {
 //	1.0.0.1:5683;1.0.0.2:5683
 //
 // When not provided, "127.0.0.1:5683" is used.
-func WithServerAddresses(addrString string) Option {
-	return func(s *Options) {
-		servers := strings.Split(addrString, ";")
-		for _, server := range servers {
-			s.serverAddress = append(s.serverAddress, server)
-		}
-	}
-}
+//func WithServerAddresses(addrString string) Option {
+//	return func(s *Options) {
+//		servers := strings.Split(addrString, ";")
+//		for _, server := range servers {
+//			s.serverAddress = append(s.serverAddress, server)
+//		}
+//	}
+//}
 
 func WithServerSendTimeout(timeout time.Duration) Option {
 	return func(s *Options) {
@@ -90,11 +89,11 @@ func WithServerRecvTimeout(timeout time.Duration) Option {
 	}
 }
 
-func WithDTLSConfig(conf *piondtls.Config) Option {
-	return func(s *Options) {
-		s.dtlsConf = conf
-	}
-}
+//func WithDTLSConfig(conf *piondtls.Config) Option {
+//	return func(s *Options) {
+//		s.dtlsConf = conf
+//	}
+//}
 
 // WithObjectStore provides an object instance persistent
 // layer accessor. If it is not provided, the default
