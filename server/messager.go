@@ -5,6 +5,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
+	"github.com/zourva/pareto/endec/senml"
 	"strconv"
 	"time"
 )
@@ -392,9 +393,28 @@ func (m *MessagerServer) Discover(peer string, oid ObjectID, oiId InstanceID, ri
 	panic("implement me")
 }
 
+func (m *MessagerServer) makeSenmlBody(value Value) ([]byte, error) {
+	record := FieldValueToSenmlRecord(value)
+	pack := senml.Pack{
+		Records: []senml.Record{*record},
+	}
+
+	data, err := senml.Encode(pack, senml.JSON)
+	if err != nil {
+		return data, nil
+	}
+
+	return nil, err
+}
+
 func (m *MessagerServer) Write(peer string, oid ObjectID, oiId InstanceID, rid ResourceID, riId InstanceID, value Value) error {
 	uri := m.makeAccessPath(oid, oiId, rid, riId)
-	req := m.NewPutRequestPlain(uri, value.ToBytes())
+	body, err := m.makeSenmlBody(value)
+	if err != nil {
+		log.Errorln("make m2m msg failed:", err)
+		return err
+	}
+	req := m.NewPutRequestPlain(uri, body)
 	rsp, err := m.SendTo(peer, req)
 	if err != nil {
 		log.Errorln("write operation failed:", err)
