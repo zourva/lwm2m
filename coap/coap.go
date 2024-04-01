@@ -5,6 +5,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -26,10 +27,23 @@ type PatternHandler = func(Request) Response
 type RouteHandler = PatternHandler
 
 func NewRouter() *Router {
-	return &Router{
+	r := &Router{
 		Router: mux.NewRouter(),
 		z:      make(map[string]*Route),
 	}
+
+	r.Router.DefaultHandleFunc(
+		func(w ResponseWriter, m *Message) {
+			if m.Type() == message.Acknowledgement {
+				// ignore if it's ack
+				return
+			}
+			if err := w.SetResponse(codes.NotFound, message.TextPlain, nil); err != nil {
+				log.Errorf("router handler: cannot set response: %v", err)
+			}
+		})
+
+	return r
 }
 
 type Route struct {

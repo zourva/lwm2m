@@ -152,9 +152,9 @@ func (p *peer) NewAckResponse(req Request, code Code) Response {
 // NewAckPiggybackedResponse creates an ACK-piggybacked response.
 func (p *peer) NewAckPiggybackedResponse(req Request, code Code, body []byte) Response {
 	msg := pool.NewMessage(req.message().Context())
-	//msg.SetType(message.Acknowledgement)
+	msg.SetType(message.Acknowledgement)
 	msg.SetCode(codes.Code(code))
-	//msg.SetMessageID(req.message().MessageID())
+	msg.SetMessageID(req.message().MessageID())
 	msg.SetToken(req.message().Token())
 
 	if body != nil {

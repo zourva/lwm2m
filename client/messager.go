@@ -311,7 +311,13 @@ func (m *MessagerClient) Connected() bool {
 
 func (m *MessagerClient) logInterceptor(next coap.Interceptor) coap.Interceptor {
 	return coap.Handler(func(w coap.ResponseWriter, r *coap.Message) {
+		//if r.Code() != codes.NotFound {
 		log.Tracef("recv msg from %v, content: %v", w.Conn().RemoteAddr(), r.String())
+		//} else {
+		//	if r.Code() == codes.NotFound {
+		//
+		//	}
+		//}
 		next.ServeCOAP(w, r)
 	})
 }
