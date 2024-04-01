@@ -247,7 +247,7 @@ func TestOnWrite(t *testing.T) {
 	}
 	write := func(oid, instId, resId, rfid uint16, value string) {
 
-		err := d.OnWrite(oid, instId, resId, rfid, []byte(value))
+		_, err := d.OnWrite(oid, instId, resId, rfid, []byte(value))
 		assert.Nil(t, err)
 
 		rsp, err := d.OnRead(oid, instId, resId, rfid)
