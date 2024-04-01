@@ -4,6 +4,8 @@ go 1.20
 
 require (
 	github.com/asdine/storm/v3 v3.2.1
+	github.com/json-iterator/go v1.1.12
+	github.com/knadh/koanf/v2 v2.1.0
 	github.com/pborman/uuid v1.2.1
 	github.com/pion/dtls/v2 v2.2.8-0.20231026152330-9cc3df9c3369
 	github.com/plgd-dev/go-coap/v3 v3.1.6
@@ -22,10 +24,16 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.0.0-alpha.1 // indirect
 	github.com/google/uuid v1.4.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/knadh/koanf/maps v0.1.1 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
+	github.com/mitchellh/copystructure v1.2.0 // indirect
+	github.com/mitchellh/reflectwalk v1.0.2 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/transport/v3 v3.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -37,7 +45,5 @@ require (
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
