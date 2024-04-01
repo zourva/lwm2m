@@ -207,7 +207,13 @@ func (m *MessagerServer) onClientUpdate(req coap.Request) coap.Response {
 
 	// get location from uri
 	loc := req.Attribute("id")
+
+	// see m.onClientRegister()
+	// ep = SecurityIdentity
+	ep := req.SecurityIdentity()
 	info := &RegistrationInfo{
+		Name:       ep,
+		Address:    req.Address().String(),
 		Location:   loc,
 		UpdateTime: time.Now(),
 	}
@@ -503,7 +509,13 @@ func (m *MessagerServer) statsInterceptor(next coap.Interceptor) coap.Intercepto
 
 func (m *MessagerServer) logInterceptor(next coap.Interceptor) coap.Interceptor {
 	return coap.Handler(func(w coap.ResponseWriter, r *coap.Message) {
+		//if r.Code() != codes.NotFound {
 		log.Tracef("recv msg from %v, content: %v", w.Conn().RemoteAddr(), r.String())
+		//} else {
+		//	if r.Code() == codes.NotFound {
+		//
+		//	}
+		//}
 		next.ServeCOAP(w, r)
 	})
 }
