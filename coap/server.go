@@ -14,6 +14,7 @@ import (
 	udpsrv "github.com/plgd-dev/go-coap/v3/udp/server"
 	log "github.com/sirupsen/logrus"
 	"sync"
+	"time"
 )
 
 const (
@@ -58,7 +59,15 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 
 	if s.dtlsOn {
 		s.dtlsDelegate = dtls.NewServer(options.WithMux(r),
-			options.WithOnNewConn(s.newConnCallback))
+			options.WithOnNewConn(s.newConnCallback),
+			options.WithTransmission(1, 1, 4),
+			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
+				go func() {
+					for f(time.Now()) {
+						time.Sleep(1 * time.Second)
+					}
+				}()
+			}))
 
 		l, err := coapnet.NewDTLSListener(network, addr, s.dtlsConf)
 		if err != nil {
@@ -68,7 +77,15 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 		s.dtlsListener = l
 	} else {
 		s.udpDelegate = udp.NewServer(options.WithMux(r),
-			options.WithOnNewConn(s.newConnCallback))
+			options.WithOnNewConn(s.newConnCallback),
+			options.WithTransmission(1, 1, 4),
+			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
+				go func() {
+					for f(time.Now()) {
+						time.Sleep(1 * time.Second)
+					}
+				}()
+			}))
 
 		l, err := coapnet.NewListenUDP(network, addr)
 		if err != nil {

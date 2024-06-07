@@ -11,6 +11,7 @@ import (
 	udpclt "github.com/plgd-dev/go-coap/v3/udp/client"
 	log "github.com/sirupsen/logrus"
 	gonet "net"
+	"time"
 )
 
 type Client interface {
@@ -41,7 +42,15 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 	}
 
 	if c.dtlsOn {
-		dial, err := dtls.Dial(server, c.dtlsConf, options.WithMux(c.Router()))
+		dial, err := dtls.Dial(server, c.dtlsConf, options.WithMux(c.Router()),
+			options.WithTransmission(1, 1, 4),
+			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
+				go func() {
+					for f(time.Now()) {
+						time.Sleep(1 * time.Second)
+					}
+				}()
+			}))
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
 			return nil, err
@@ -55,7 +64,15 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 
 		c.delegate = dial
 	} else {
-		dial, err := udp.Dial(server, options.WithMux(c.Router()))
+		dial, err := udp.Dial(server, options.WithMux(c.Router()),
+			options.WithTransmission(1, 1, 4),
+			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
+				go func() {
+					for f(time.Now()) {
+						time.Sleep(1 * time.Second)
+					}
+				}()
+			}))
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
 			return nil, err
