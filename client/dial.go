@@ -12,7 +12,8 @@ import (
 )
 
 type ServerInfo struct {
-	address string
+	network string //network namely tcp, udp, http, mqtt
+	address string //address with schema stripped already
 
 	// securityMode
 	// Determines which security mode is used
@@ -62,9 +63,7 @@ func checkCommonName(name string, cert *tls.Certificate) error {
 	return nil
 }
 
-func loadDTLSConfig(client *LwM2MClient, server *ServerInfo) (*piondtls.Config, error) {
-	var dtlsConf *piondtls.Config
-
+func makeSecurityLayerOption(client *LwM2MClient, server *ServerInfo) (coap.PeerOption, error) {
 	switch server.securityMode {
 	case SecurityModeCertificate:
 		cert, err := cipher.LoadKeyAndCertificate(server.secretKey, server.publicKeyOrIdentity)
@@ -90,35 +89,51 @@ func loadDTLSConfig(client *LwM2MClient, server *ServerInfo) (*piondtls.Config, 
 			log.Debugf("load root certificate file successfully")
 		}
 
-		dtlsConf = &piondtls.Config{
-			Certificates:         []tls.Certificate{*cert},
-			ExtendedMasterSecret: piondtls.RequireExtendedMasterSecret,
-			RootCAs:              rootCertPool,
-			//InsecureSkipVerify:   dtls.InsecureSkipVerify,
+		if server.network == coap.UDPBearer {
+			dtlsConf := &piondtls.Config{
+				Certificates:         []tls.Certificate{*cert},
+				ExtendedMasterSecret: piondtls.RequireExtendedMasterSecret,
+				RootCAs:              rootCertPool,
+				//InsecureSkipVerify:   dtls.InsecureSkipVerify,
+			}
+
+			return coap.WithSecurityLayerConfig(coap.SecurityLayerDTLS, dtlsConf), nil
+		} else {
+			tlsConf := &tls.Config{
+				Certificates:       []tls.Certificate{*cert},
+				RootCAs:            rootCertPool,
+				InsecureSkipVerify: true,
+			}
+
+			return coap.WithSecurityLayerConfig(coap.SecurityLayerTLS, tlsConf), nil
 		}
+
 	//case SecurityModePreSharedKey:
 	//case SecurityModeRawPublicKey:
 	case SecurityModeNoSec:
 		// nothing todo
-		break
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unsupported security mode:%d", server.securityMode)
 	}
-
-	return dtlsConf, nil
 }
 
 func dial(client *LwM2MClient, server *ServerInfo) (*MessagerClient, error) {
-	var dtlsConf *piondtls.Config
-	var err error
+	var options []coap.PeerOption
 
-	if dtlsConf, err = loadDTLSConfig(client, server); err != nil {
-		log.Errorf("load dtls config failed: %v", err)
+	// loads security layer config, which may be nil if security mode is NoSec
+	option, err := makeSecurityLayerOption(client, server)
+	if err != nil {
+		log.Errorf("load security layer config failed: %v", err)
 		return nil, err
 	}
 
+	if option != nil {
+		options = append(options, option)
+	}
+
 	messager := NewMessager(client)
-	if err = messager.Dial(server.address, coap.WithDTLSConfig(dtlsConf)); err != nil {
+	if err = messager.Dial(server.network, server.address, options...); err != nil {
 		return nil, err
 	}
 

@@ -1,7 +1,7 @@
 package server
 
 import (
-	piondtls "github.com/pion/dtls/v2"
+	"github.com/zourva/lwm2m/coap"
 	"github.com/zourva/lwm2m/core"
 )
 
@@ -85,8 +85,9 @@ func WithObjectClassRegistry(registry core.ObjectRegistry) Option {
 	}
 }
 
-func WithDTLSConfig(conf *piondtls.Config) Option {
+func WithSecurityConfig(kind coap.SecurityLayer, conf any) Option {
 	return func(s *LwM2MServer) {
-		s.dtlsConf = conf
+		s.secureLayer = kind
+		s.secureConf = conf
 	}
 }

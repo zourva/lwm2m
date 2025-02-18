@@ -3,6 +3,7 @@ package coap
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	piondtls "github.com/pion/dtls/v2"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -25,10 +26,27 @@ func WithWriteBufferSize(size uint) PeerOption {
 	}
 }
 
-func WithDTLSConfig(dtlsConf *piondtls.Config) PeerOption {
-	return func(peer Peer) {
-		peer.EnableDTLS(dtlsConf)
+type SecurityLayer int
+
+const (
+	SecurityLayerTLS SecurityLayer = iota
+	SecurityLayerDTLS
+)
+
+// WithSecurityLayerConfig provides optional security layer configuration
+// identified by the kind parameter. The value is expected to be of type
+// *tls.Config for TLS and *dtls.Config for DTLS.
+func WithSecurityLayerConfig(kind SecurityLayer, conf any) PeerOption {
+	if kind == SecurityLayerTLS {
+		return func(peer Peer) {
+			peer.EnableTLS(conf.(*tls.Config))
+		}
+	} else {
+		return func(peer Peer) {
+			peer.EnableDTLS(conf.(*piondtls.Config))
+		}
 	}
+
 }
 
 //func WithRouter(router *Router) PeerOption {
@@ -60,6 +78,7 @@ type Peer interface {
 	NewAckPiggybackedResponse(req Request, code Code, body []byte) Response
 
 	EnableDTLS(conf *piondtls.Config)
+	EnableTLS(conf *tls.Config)
 
 	SetReadBufferSize(size uint)
 	SetWriteBufferSize(size uint)
@@ -79,8 +98,9 @@ type peer struct {
 	readBufferSize  int
 	writeBufferSize int
 
-	dtlsOn   bool
-	dtlsConf *piondtls.Config
+	tlsOn    bool
+	dtlsConf *piondtls.Config //valid iff bearer is UDP
+	tlsConf  *tls.Config      //valid iff bearer is TCP
 }
 
 func (p *peer) Router() *Router {
@@ -174,7 +194,16 @@ func (p *peer) EnableDTLS(conf *piondtls.Config) {
 	}
 
 	p.dtlsConf = conf
-	p.dtlsOn = true
+	p.tlsOn = true
+}
+
+func (p *peer) EnableTLS(conf *tls.Config) {
+	if conf == nil {
+		return
+	}
+
+	p.tlsConf = conf
+	p.tlsOn = true
 }
 
 func (p *peer) SetReadBufferSize(size uint) {

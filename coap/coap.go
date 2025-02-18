@@ -11,6 +11,16 @@ import (
 
 const (
 	DefaultTimeout = 5 * time.Second
+
+	TCPBearer  = "tcp"
+	UDPBearer  = "udp"
+	HTTPBearer = "http"
+	MQTTBearer = "mqtt"
+
+	UdpCoapSchema  = "coap://"
+	DtlsCoapSchema = "coaps://"
+	TcpCoapSchema  = "coap+tcp://"
+	TlsCoapSchema  = "coaps+tcp://"
 )
 
 type Message = mux.Message

@@ -62,13 +62,13 @@ func (m *MessagerClient) Close() error {
 	return nil
 }
 
-func (m *MessagerClient) Dial(addr string, opts ...coap.PeerOption) error {
-	log.Debugf("dial new connection(to:%s)...", addr)
+func (m *MessagerClient) Dial(network, addr string, opts ...coap.PeerOption) error {
+	log.Debugf("dial new connection(to:%s:%s)...", network, addr)
 
 	//router := m.initRouter()
 
 	//opts = append(opts, coap.WithRouter(router))
-	cli, err := coap.Dial(addr, opts...)
+	cli, err := coap.Dial(network, addr, opts...)
 	if err != nil {
 		return err
 	}
@@ -78,14 +78,14 @@ func (m *MessagerClient) Dial(addr string, opts ...coap.PeerOption) error {
 	return nil
 }
 
-func (m *MessagerClient) Redial(addr string, opts ...coap.PeerOption) error {
+func (m *MessagerClient) Redial(network, addr string, opts ...coap.PeerOption) error {
 	if m.Client != nil {
 		if err := m.Close(); err != nil {
 			return err
 		}
 	}
 
-	return m.Dial(addr, opts...)
+	return m.Dial(network, addr, opts...)
 }
 
 func (m *MessagerClient) Start() {

@@ -14,7 +14,7 @@ import (
 //
 // Procedures, initiated by the server but not terminated
 // within the LwM2M protocol layer, will be exposed to
-// client side applications by methods defined here too:
+// client-side applications by methods defined here too, including:
 //
 //	Create/Read/Write/Execute of DeviceManagement & Service Enablement
 //	Observe of Information Reporting

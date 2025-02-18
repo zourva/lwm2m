@@ -1,13 +1,13 @@
 package server
 
 import (
-	piondtls "github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
+	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 )
 
 const (
-	defaultNetwork = "udp"
+	defaultBearer  = "udp"
 	defaultAddress = ":5683"
 )
 
@@ -39,13 +39,14 @@ func New( /*name string,*/ opts ...Option) *LwM2MServer {
 }
 
 type LwM2MServer struct {
-	//name     string
-	network  string
-	address  string
+	network  string //supported options are udp/tcp/mqtt/http
+	address  string //address with schema stripped already
 	registry ObjectRegistry
 	store    RegInfoStore
 	provider GuidProvider
-	dtlsConf *piondtls.Config
+
+	secureLayer coap.SecurityLayer
+	secureConf  any //either *dtls.Config or *tls.Config
 
 	observer RegisteredClientObserver
 	manager  RegisteredClientManager
@@ -86,6 +87,10 @@ func (s *LwM2MServer) EnableReportingService(reportService ReportingService) {
 
 func (s *LwM2MServer) Serve() {
 	s.messager = NewMessager(s)
+	if s.messager == nil {
+		log.Fatalln("create lwm2m messager failed")
+	}
+
 	s.messager.Start()
 	s.manager.Start()
 	//s.evtMgr.EmitEvent(EventServerStarted)
@@ -110,7 +115,7 @@ func (s *LwM2MServer) Listen(et EventType, h EventHandler) {
 
 func (s *LwM2MServer) makeDefaults() {
 	if len(s.network) == 0 {
-		s.network = defaultNetwork
+		s.network = defaultBearer
 	}
 
 	if len(s.address) == 0 {

@@ -25,8 +25,18 @@ type MessagerServer struct {
 }
 
 func NewMessager(s *LwM2MServer) *MessagerServer {
+	var opts []coap.PeerOption
+	if s.secureConf != nil {
+		opts = append(opts, coap.WithSecurityLayerConfig(s.secureLayer, s.secureConf))
+	}
+
+	server := coap.NewServer(s.network, s.address, opts...)
+	if server == nil {
+		return nil
+	}
+
 	m := &MessagerServer{
-		Server:      coap.NewServer(s.network, s.address, coap.WithDTLSConfig(s.dtlsConf)),
+		Server:      server,
 		lwM2MServer: s,
 		network:     s.network,
 		address:     s.address,
@@ -65,7 +75,7 @@ func (m *MessagerServer) checkClientRequest(req coap.Request) error {
 	ep := req.Query("ep")
 	id := req.SecurityIdentity()
 
-	if m.lwM2MServer.dtlsConf != nil && len(ep) != 0 {
+	if m.lwM2MServer.secureConf != nil && len(ep) != 0 {
 		//If the OSCORE Sender ID is not set to Endpoint Client Name, then the LwM2M Server MUST compare the received
 		//Endpoint Client Name identifier with the OSCORE Sender ID of the LwM2M Client. This comparison may either be an
 		//equality match or may involve a dedicated lookup table to ensure that LwM2M Clients cannot intentionally or due to

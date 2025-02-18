@@ -5,6 +5,7 @@ import (
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
 	"github.com/zourva/pareto/box/meta"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -135,13 +136,28 @@ func (c *LwM2MClient) hasRegistrationServer() bool {
 	return false
 }
 
+func (c *LwM2MClient) getBearerFromURISchema(uri string) (bearer, address string, secured bool) {
+	if strings.HasPrefix(uri, coap.UdpCoapSchema) {
+		return coap.UDPBearer, strings.TrimPrefix(uri, coap.UdpCoapSchema), false
+	} else if strings.HasPrefix(uri, coap.DtlsCoapSchema) {
+		return coap.UDPBearer, strings.TrimPrefix(uri, coap.DtlsCoapSchema), true
+	} else if strings.HasPrefix(uri, coap.TcpCoapSchema) {
+		return coap.TCPBearer, strings.TrimPrefix(uri, coap.TcpCoapSchema), false
+	} else if strings.HasPrefix(uri, coap.TlsCoapSchema) {
+		return coap.TCPBearer, strings.TrimPrefix(uri, coap.TlsCoapSchema), true
+	}
+
+	// udp without security by default
+	return coap.UDPBearer, strings.TrimPrefix(uri, coap.UdpCoapSchema), false
+}
+
 // get bootstrap server account from store, if any
 func (c *LwM2MClient) getBootstrapInfos() (*BootstrapServerBootstrapInfo, *ServerInfo) {
 	instances := c.store.GetInstances(OmaObjectSecurity)
 	for _, instance := range instances {
 		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
 		if isBootstrapServer { // BootstrapServer == true
-			address := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
+			uri := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
 
 			securityMode := FieldValue[int](instance, LwM2MSecuritySecurityMode)
 			publicKeyOrIdentity := FieldValue[[]byte](instance, LwM2MSecurityPublicKeyOrIdentity)
@@ -152,7 +168,15 @@ func (c *LwM2MClient) getBootstrapInfos() (*BootstrapServerBootstrapInfo, *Serve
 				BootstrapServerAccount: &BootstrapServerAccount{
 					SecurityObjectInstance: instance,
 				}}
+
+			network, address, secured := c.getBearerFromURISchema(uri)
+			if secured && securityMode == SecurityModeNoSec {
+				log.Errorln("security mode conflicts with bootstap server uri schema")
+				return nil, nil
+			}
+
 			serverInfo := &ServerInfo{
+				network:             network,
 				address:             address,
 				securityMode:        securityMode,
 				publicKeyOrIdentity: publicKeyOrIdentity,
@@ -171,14 +195,14 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 	var list []*regServerInfo
 	var ms = make(map[int]*regServerInfo)
 
-	// 在server列表中查找 Register server
+	// extract server shortId<->info index from storage
 	instances := c.store.GetInstances(OmaObjectSecurity)
 	for _, instance := range instances {
 		// bootstrapServer is true, otherwise false
 		//instance.Class().Operator().Get(instance, LwM2MSecurityBootstrapServer, LwM2MSecurityLwM2MServerURI)
 		isBootstrapServer := FieldValue[bool](instance, LwM2MSecurityBootstrapServer)
 		if !isBootstrapServer {
-			address := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
+			uri := FieldValue[string](instance, LwM2MSecurityLwM2MServerURI)
 			shortId := FieldValue[int](instance, LwM2MSecurityShortServerID)
 
 			securityMode := FieldValue[int](instance, LwM2MSecuritySecurityMode)
@@ -186,8 +210,15 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 			secretKey := FieldValue[[]byte](instance, LwM2MSecuritySecretKey)
 			serverPublicKey := FieldValue[[]byte](instance, LwM2MSecurityServerPublicKeyOrIdentity)
 
+			network, address, secured := c.getBearerFromURISchema(uri)
+			if secured && securityMode == SecurityModeNoSec {
+				log.Errorln("security mode conflicts with server uri schema")
+				// TODO expose error
+			}
+
 			ms[shortId] = &regServerInfo{
 				ServerInfo: ServerInfo{
+					network:             network,
 					address:             address,
 					securityMode:        securityMode,
 					publicKeyOrIdentity: publicKeyOrIdentity,
@@ -207,7 +238,7 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 		}
 	}
 
-	// 在 Register server 列表中 获取 server 信息
+	// get a target reg server from reg server list
 	servers := c.store.GetInstances(OmaObjectServer)
 	for _, server := range servers {
 		// TODO: retrieve from server

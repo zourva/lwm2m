@@ -3,12 +3,14 @@ package coap
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
+	"github.com/plgd-dev/go-coap/v3/mux"
 	"github.com/plgd-dev/go-coap/v3/options"
+	"github.com/plgd-dev/go-coap/v3/tcp"
 	"github.com/plgd-dev/go-coap/v3/udp"
-	udpclt "github.com/plgd-dev/go-coap/v3/udp/client"
 	log "github.com/sirupsen/logrus"
 	gonet "net"
 	"time"
@@ -27,12 +29,14 @@ type Client interface {
 
 type coapClient struct {
 	*peer
-	delegate *udpclt.Conn
+	bearer mux.Conn
 }
 
 var _ Client = &coapClient{}
 
-func Dial(server string, opts ...PeerOption) (Client, error) {
+// Dial connects to server using the given bearer, address and options.
+// Supported bearer includes: udp(coap)/tcp(coap)/mqtt/http.
+func Dial(bearer, address string, opts ...PeerOption) (Client, error) {
 	c := &coapClient{
 		peer: newPeer(NewRouter()),
 	}
@@ -41,9 +45,65 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 		fn(c.peer)
 	}
 
-	if c.dtlsOn {
-		dial, err := dtls.Dial(server, c.dtlsConf, options.WithMux(c.Router()),
-			options.WithTransmission(1, 1, 4),
+	var err error
+	switch bearer {
+	case UDPBearer: //coap over udp/dtls
+		err = c.dialUdp(address)
+	case TCPBearer: //coap over tcp/tls
+		err = c.dialTcp(address)
+	case MQTTBearer: //mqtt/mqtts over tcp/tls
+		err = c.dialMqtt(address)
+	case HTTPBearer: //http/https over tcp/tls
+		err = c.dialHttp(address)
+	default:
+		log.Errorf("error dialing: unsupported bearer: %s", bearer)
+		return nil, fmt.Errorf("unsupported bearer: %s", bearer)
+	}
+
+	return c, err
+}
+
+func (s *coapClient) dialHttp(address string) error {
+	if s.tlsOn {
+		//TODO
+	} else {
+		//TODO
+	}
+
+	return fmt.Errorf("http bearer is not supported yet")
+}
+
+func (s *coapClient) dialMqtt(address string) error {
+	if s.tlsOn {
+		//TODO
+	} else {
+		//TODO
+	}
+
+	return fmt.Errorf("mqtt bearer is not supported yet")
+}
+
+func (s *coapClient) dialTcp(address string) error {
+	var opts []tcp.Option
+	if s.tlsOn {
+		opts = append(opts, options.WithTLS(s.tlsConf))
+	}
+
+	dial, err := tcp.Dial(address, opts...)
+	if err != nil {
+		log.Errorf("error dialing tcp: %v", err)
+		return err
+	}
+
+	s.bearer = dial
+
+	return nil
+}
+
+func (s *coapClient) dialUdp(address string) error {
+	if s.tlsOn {
+		dial, err := dtls.Dial(address, s.dtlsConf, options.WithMux(s.Router()),
+			options.WithTransmission(1, 500*time.Millisecond, 4),
 			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
 				go func() {
 					for f(time.Now()) {
@@ -53,19 +113,19 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 			}))
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
-			return nil, err
+			return err
 		}
 
-		//err := c.delegate.Session().NetConn().(*piondtls.Conn).SetReadBuffer(c.readBufferSize)
+		//err := c.bearer.Session().NetConn().(*piondtls.Conn).SetReadBuffer(c.readBufferSize)
 		//if err != nil {
 		//	log.Errorf("error set reader buffer size: %v", err)
 		//	return nil, err
 		//}
 
-		c.delegate = dial
+		s.bearer = dial
 	} else {
-		dial, err := udp.Dial(server, options.WithMux(c.Router()),
-			options.WithTransmission(1, 1, 4),
+		dial, err := udp.Dial(address, options.WithMux(s.Router()),
+			options.WithTransmission(1, 400*time.Millisecond, 4),
 			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
 				go func() {
 					for f(time.Now()) {
@@ -75,25 +135,25 @@ func Dial(server string, opts ...PeerOption) (Client, error) {
 			}))
 		if err != nil {
 			log.Errorf("error dialing dtls: %v", err)
-			return nil, err
+			return err
 		}
 
-		err = dial.Session().NetConn().(*gonet.UDPConn).SetWriteBuffer(c.writeBufferSize)
+		err = dial.Session().NetConn().(*gonet.UDPConn).SetWriteBuffer(s.writeBufferSize)
 		if err != nil {
 			log.Errorf("error set write buffer size: %v", err)
-			return nil, err
+			return err
 		}
 
-		err = dial.Session().NetConn().(*gonet.UDPConn).SetReadBuffer(c.readBufferSize)
+		err = dial.Session().NetConn().(*gonet.UDPConn).SetReadBuffer(s.readBufferSize)
 		if err != nil {
 			log.Errorf("error set read buffer size: %v", err)
-			return nil, err
+			return err
 		}
 
-		c.delegate = dial
+		s.bearer = dial
 	}
 
-	return c, nil
+	return nil
 }
 
 func (s *coapClient) Send(req Request) (Response, error) {
@@ -102,30 +162,30 @@ func (s *coapClient) Send(req Request) (Response, error) {
 
 	req.message().SetContext(ctx)
 	msg := req.message().Message
-	rsp, err := s.delegate.Do(msg)
+	rsp, err := s.bearer.Do(msg)
 
 	log.Tracef("make request to %v, req: %v, rsp: %v",
-		s.delegate.RemoteAddr(), msg, rsp)
+		s.bearer.RemoteAddr(), msg, rsp)
 
 	return NewResponse(rsp), err
 }
 
 func (s *coapClient) Notify(observationId string, data []byte) error {
-	m := s.delegate.AcquireMessage(s.delegate.Context())
-	defer s.delegate.ReleaseMessage(m)
+	m := s.bearer.AcquireMessage(s.bearer.Context())
+	defer s.bearer.ReleaseMessage(m)
 	m.SetCode(codes.Content)
 	//m.SetToken(token)
 	m.SetBody(bytes.NewReader(data))
 	m.SetContentFormat(message.TextPlain)
 	//m.SetObserve(uint32(obs))
 
-	err := s.delegate.WriteMessage(m)
+	err := s.bearer.WriteMessage(m)
 	log.Tracef("notify %v of observation %s, msg: %v, err: %v",
-		s.delegate.RemoteAddr(), observationId, m, err)
+		s.bearer.RemoteAddr(), observationId, m, err)
 
 	return err
 }
 
 func (s *coapClient) Close() error {
-	return s.delegate.Close()
+	return s.bearer.Close()
 }

@@ -9,6 +9,9 @@ import (
 	"github.com/plgd-dev/go-coap/v3/dtls/server"
 	coapnet "github.com/plgd-dev/go-coap/v3/net"
 	"github.com/plgd-dev/go-coap/v3/options"
+	"github.com/plgd-dev/go-coap/v3/tcp"
+	tcpclt "github.com/plgd-dev/go-coap/v3/tcp/client"
+	tcpsrv "github.com/plgd-dev/go-coap/v3/tcp/server"
 	"github.com/plgd-dev/go-coap/v3/udp"
 	udpclt "github.com/plgd-dev/go-coap/v3/udp/client"
 	udpsrv "github.com/plgd-dev/go-coap/v3/udp/server"
@@ -20,6 +23,12 @@ import (
 const (
 	keyClientSecurityIdentity = "securityId"
 )
+
+type bearerDescriptor struct {
+	create func() error
+	close  func() error
+	serve  func() error
+}
 
 type Server interface {
 	Peer
@@ -36,11 +45,19 @@ type coapServer struct {
 	network string
 	address string
 
+	bearers map[string]*bearerDescriptor
+
+	// udp and dtls are not unified,
+	// so we need to maintain them separately
 	udpListener *coapnet.UDPConn
 	udpDelegate *udpsrv.Server
 
 	dtlsListener server.Listener
 	dtlsDelegate *server.Server
+
+	tcpListener *coapnet.TCPListener
+	tlsListener *coapnet.TLSListener
+	tcpDelegate *tcpsrv.Server
 
 	conns sync.Map
 }
@@ -51,16 +68,45 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 		peer:    newPeer(r),
 		network: network,
 		address: addr,
+		bearers: make(map[string]*bearerDescriptor),
+	}
+
+	s.bearers = map[string]*bearerDescriptor{
+		UDPBearer: {
+			create: s.newUdp,
+			serve:  s.serveUdp,
+			close:  s.closeUdp,
+		},
+		TCPBearer: {
+			create: s.newTcp,
+			serve:  s.serveTcp,
+			close:  s.closeTcp,
+		},
+	}
+
+	bearer, ok := s.bearers[network]
+	if !ok {
+		log.Errorf("unsupported bearer: %s", network)
+		return nil
 	}
 
 	for _, fn := range opts {
 		fn(s.peer)
 	}
 
-	if s.dtlsOn {
-		s.dtlsDelegate = dtls.NewServer(options.WithMux(r),
-			options.WithOnNewConn(s.newConnCallback),
-			options.WithTransmission(1, 1, 4),
+	err := bearer.create()
+	if err != nil {
+		return nil
+	}
+
+	return s
+}
+
+func (s *coapServer) newUdp() error {
+	if s.tlsOn {
+		s.dtlsDelegate = dtls.NewServer(options.WithMux(s.peer.router),
+			options.WithOnNewConn(s.newUdpConnCallback),
+			options.WithTransmission(1, 500*time.Millisecond, 4),
 			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
 				go func() {
 					for f(time.Now()) {
@@ -69,16 +115,17 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 				}()
 			}))
 
-		l, err := coapnet.NewDTLSListener(network, addr, s.dtlsConf)
+		l, err := coapnet.NewDTLSListener(s.network, s.address, s.dtlsConf)
 		if err != nil {
 			log.Errorln("new listener failed:", err)
-			return nil
+			return err
 		}
+
 		s.dtlsListener = l
 	} else {
-		s.udpDelegate = udp.NewServer(options.WithMux(r),
-			options.WithOnNewConn(s.newConnCallback),
-			options.WithTransmission(1, 1, 4),
+		s.udpDelegate = udp.NewServer(options.WithMux(s.peer.router),
+			options.WithOnNewConn(s.newUdpConnCallback),
+			options.WithTransmission(1, 400*time.Millisecond, 4),
 			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
 				go func() {
 					for f(time.Now()) {
@@ -87,16 +134,58 @@ func NewServer(network, addr string, opts ...PeerOption) Server {
 				}()
 			}))
 
-		l, err := coapnet.NewListenUDP(network, addr)
+		l, err := coapnet.NewListenUDP(s.network, s.address)
 		if err != nil {
 			log.Errorln("new listener failed:", err)
-			return nil
+			return err
 		}
 
 		s.udpListener = l
 	}
 
-	return s
+	return nil
+}
+
+func (s *coapServer) newTcp() error {
+	if s.tlsOn {
+		s.tcpDelegate = tcp.NewServer(options.WithMux(s.peer.router),
+			//options.WithOnNewConn(s.newTlsConnCallback),
+			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
+				go func() {
+					for f(time.Now()) {
+						time.Sleep(1 * time.Second)
+					}
+				}()
+			}))
+
+		l, err := coapnet.NewTLSListener(s.network, s.address, s.tlsConf)
+		if err != nil {
+			log.Errorln("new tls listener failed:", err)
+			return err
+		}
+
+		s.tlsListener = l
+	} else {
+		s.tcpDelegate = tcp.NewServer(options.WithMux(s.peer.router),
+			options.WithOnNewConn(s.newTcpConnCallback),
+			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
+				go func() {
+					for f(time.Now()) {
+						time.Sleep(1 * time.Second)
+					}
+				}()
+			}))
+
+		l, err := coapnet.NewTCPListener(s.network, s.address)
+		if err != nil {
+			log.Errorln("new tcp listener failed:", err)
+			return err
+		}
+
+		s.tcpListener = l
+	}
+
+	return nil
 }
 
 func (s *coapServer) saveDtlsData(cc *udpclt.Conn) {
@@ -122,7 +211,17 @@ func (s *coapServer) saveDtlsData(cc *udpclt.Conn) {
 	}
 }
 
-func (s *coapServer) newConnCallback(cc *udpclt.Conn) {
+func (s *coapServer) newTcpConnCallback(cc *tcpclt.Conn) {
+	s.conns.Store(cc.RemoteAddr().String(), cc)
+	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
+
+	cc.AddOnClose(func() {
+		log.Infof("connection released: %s-%p", cc.RemoteAddr().String(), cc)
+		s.conns.Delete(cc.RemoteAddr().String())
+	})
+}
+
+func (s *coapServer) newUdpConnCallback(cc *udpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
 
@@ -137,20 +236,44 @@ func (s *coapServer) newConnCallback(cc *udpclt.Conn) {
 	})
 }
 
-func (s *coapServer) Serve() error {
-	if s.dtlsOn {
+func (s *coapServer) serveUdp() error {
+	if s.tlsOn {
 		return s.dtlsDelegate.Serve(s.dtlsListener)
 	} else {
 		return s.udpDelegate.Serve(s.udpListener)
 	}
 }
 
-func (s *coapServer) Shutdown() {
-	if s.dtlsOn {
-		_ = s.dtlsListener.Close()
+func (s *coapServer) serveTcp() error {
+	if s.tlsOn {
+		return s.tcpDelegate.Serve(s.tlsListener)
 	} else {
-		_ = s.udpListener.Close()
+		return s.tcpDelegate.Serve(s.tcpListener)
 	}
+}
+
+func (s *coapServer) Serve() error {
+	return s.bearers[s.network].serve()
+}
+
+func (s *coapServer) closeUdp() error {
+	if s.tlsOn {
+		return s.dtlsListener.Close()
+	} else {
+		return s.udpListener.Close()
+	}
+}
+
+func (s *coapServer) closeTcp() error {
+	if s.tlsOn {
+		return s.tlsListener.Close()
+	} else {
+		return s.tcpListener.Close()
+	}
+}
+
+func (s *coapServer) Shutdown() {
+	_ = s.bearers[s.network].close()
 }
 
 func (s *coapServer) SendTo(addr string, req Request) (Response, error) {
