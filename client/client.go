@@ -170,9 +170,9 @@ func (c *LwM2MClient) getBootstrapInfos() (*BootstrapServerBootstrapInfo, *Serve
 				}}
 
 			network, address, secured := c.getBearerFromURISchema(uri)
-			if secured && securityMode == SecurityModeNoSec {
-				log.Errorln("security mode conflicts with bootstap server uri schema")
-				return nil, nil
+			if (secured && securityMode == SecurityModeNoSec) ||
+				(!secured && securityMode != SecurityModeNoSec) {
+				log.Fatalln("security mode conflicts with bootstrap server uri schema:", uri)
 			}
 
 			serverInfo := &ServerInfo{
@@ -211,9 +211,9 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 			serverPublicKey := FieldValue[[]byte](instance, LwM2MSecurityServerPublicKeyOrIdentity)
 
 			network, address, secured := c.getBearerFromURISchema(uri)
-			if secured && securityMode == SecurityModeNoSec {
-				log.Errorln("security mode conflicts with server uri schema")
-				// TODO expose error
+			if (secured && securityMode == SecurityModeNoSec) ||
+				(!secured && securityMode != SecurityModeNoSec) {
+				log.Fatalln("security mode conflicts with server uri schema:", uri)
 			}
 
 			ms[shortId] = &regServerInfo{
