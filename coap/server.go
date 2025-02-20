@@ -2,6 +2,7 @@ package coap
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	piondtls "github.com/pion/dtls/v2"
@@ -149,7 +150,7 @@ func (s *coapServer) newUdp() error {
 func (s *coapServer) newTcp() error {
 	if s.tlsOn {
 		s.tcpDelegate = tcp.NewServer(options.WithMux(s.peer.router),
-			//options.WithOnNewConn(s.newTlsConnCallback),
+			options.WithOnNewConn(s.newTcpConnCallback),
 			options.WithPeriodicRunner(func(f func(now time.Time) bool) {
 				go func() {
 					for f(time.Now()) {
@@ -188,32 +189,22 @@ func (s *coapServer) newTcp() error {
 	return nil
 }
 
-func (s *coapServer) saveDtlsData(cc *udpclt.Conn) {
-	dtlsConn, ok := cc.NetConn().(*piondtls.Conn)
-	if !ok {
-		return
-	}
-
-	state := dtlsConn.ConnectionState()
-	if state.PeerCertificates != nil {
-		// certificate mode
-		clientCert, err := x509.ParseCertificate(state.PeerCertificates[0])
-		if err == nil {
-			if len(clientCert.Subject.CommonName) != 0 {
-				cc.SetContextValue(keyClientSecurityIdentity, clientCert.Subject.CommonName)
-			}
-		}
-	} else {
-		// psk mode or raw public key mode
-		if state.IdentityHint != nil {
-			cc.SetContextValue(keyClientSecurityIdentity, state.IdentityHint)
-		}
-	}
-}
-
 func (s *coapServer) newTcpConnCallback(cc *tcpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
+
+	if s.tlsConf != nil {
+		state := cc.NetConn().(*tls.Conn).ConnectionState()
+		if state.PeerCertificates != nil { // certificate mode
+			clientCert := state.PeerCertificates[0]
+			if len(clientCert.Subject.CommonName) != 0 {
+				cc.SetContextValue(keyClientSecurityIdentity, clientCert.Subject.CommonName)
+			}
+		} else { // psk mode or raw public key mode
+			log.Fatalf("TLS must have common name provided")
+			//log.Warnf("TLS must have common name provided")
+		}
+	}
 
 	cc.AddOnClose(func() {
 		log.Infof("connection released: %s-%p", cc.RemoteAddr().String(), cc)
@@ -225,9 +216,20 @@ func (s *coapServer) newUdpConnCallback(cc *udpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
 
+	// save  if dtls enabled
 	if s.dtlsConf != nil {
-		// enabled dtls
-		s.saveDtlsData(cc)
+		state := cc.NetConn().(*piondtls.Conn).ConnectionState()
+		if state.PeerCertificates != nil { // certificate mode
+			if clientCert, err := x509.ParseCertificate(state.PeerCertificates[0]); err == nil {
+				if len(clientCert.Subject.CommonName) != 0 {
+					cc.SetContextValue(keyClientSecurityIdentity, clientCert.Subject.CommonName)
+				}
+			}
+		} else { // psk mode or raw public key mode
+			if state.IdentityHint != nil {
+				cc.SetContextValue(keyClientSecurityIdentity, state.IdentityHint)
+			}
+		}
 	}
 
 	cc.AddOnClose(func() {
