@@ -8,6 +8,7 @@ import (
 	piondtls "github.com/pion/dtls/v2"
 	"github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/dtls/server"
+	"github.com/plgd-dev/go-coap/v3/message/pool"
 	coapnet "github.com/plgd-dev/go-coap/v3/net"
 	"github.com/plgd-dev/go-coap/v3/options"
 	"github.com/plgd-dev/go-coap/v3/tcp"
@@ -285,12 +286,21 @@ func (s *coapServer) SendTo(addr string, req Request) (Response, error) {
 		return nil, fmt.Errorf("remote peer address %s is not found", addr)
 	}
 
-	cc := c.(*udpclt.Conn)
-
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout())
 	defer cancel()
 
 	req.message().SetContext(ctx)
-	rsp, err := cc.Do(req.message().Message)
+
+	var rsp *pool.Message
+	var err error
+	switch s.network {
+	case UDPBearer:
+		cc := c.(*udpclt.Conn)
+		rsp, err = cc.Do(req.message().Message)
+	case TCPBearer:
+		cc := c.(*tcpclt.Conn)
+		rsp, err = cc.Do(req.message().Message)
+	}
+
 	return NewResponse(rsp), err
 }

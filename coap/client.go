@@ -85,7 +85,7 @@ func (s *coapClient) dialMqtt(address string) error {
 
 func (s *coapClient) dialTcp(address string) error {
 	// In TCP dialing, disable the block-wise option.
-	opts := []tcp.Option{options.WithBlockwise(false, 0, 0)}
+	opts := []tcp.Option{options.WithBlockwise(false, 0, 0), options.WithMux(s.Router())}
 	if s.tlsOn {
 		opts = append(opts, options.WithTLS(s.tlsConf))
 	}
