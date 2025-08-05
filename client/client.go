@@ -247,6 +247,20 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 		if s, ok := ms[shortId]; ok {
 			lifetime := FieldValue[int](server, LwM2MServerLifetime)
 			s.lifetime = uint64(lifetime)
+			s.blocking = FieldValueWithDefault[bool](server, LwM2MServerRegistrationFailureBlock, s.blocking)
+			//s.bootstrap = FieldValueWithDefault[bool](server, LwM2MServerBootstrap, s.bootstrap)
+			//s.priorityOrder = FieldValueWithDefault[int](server, LwM2MServerPriorityOrder, s.priorityOrder)
+			initRegDelay := FieldValueWithDefault[int](server, LwM2MServerInitialRegistrationDelayTimer, int(s.initRegDelay))
+			s.initRegDelay = uint64(initRegDelay)
+			commRetryLimit := FieldValueWithDefault[int](server, LwM2MServerCommunicationRetryCount, int(s.commRetryLimit))
+			s.commRetryLimit = uint64(commRetryLimit)
+			commRetryDelay := FieldValueWithDefault[int](server, LwM2MServerCommunicationRetryTimer, int(s.commRetryDelay))
+			s.commRetryDelay = uint64(commRetryDelay)
+			commSeqRetryDelay := FieldValueWithDefault[int](server, LwM2MServerCommunicationSequenceDelayTimer, int(s.commSeqRetryDelay))
+			s.commSeqRetryDelay = uint64(commSeqRetryDelay)
+			commSeqRetryLimit := FieldValueWithDefault[int](server, LwM2MServerCommunicationSequenceRetryCount, int(s.commSeqRetryLimit))
+			s.commSeqRetryLimit = uint64(commSeqRetryLimit)
+
 			list = append(list, s)
 		}
 	}

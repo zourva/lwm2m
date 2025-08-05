@@ -71,6 +71,15 @@ func FieldValue[T bool | int | string | []byte](inst ObjectInstance, id Resource
 	return v
 }
 
+func FieldValueWithDefault[T bool | int | string | []byte](inst ObjectInstance, id ResourceID, def T) T {
+	f := inst.Helper().SingleField(id)
+	if f != nil {
+		return f.Get().(T)
+	}
+
+	return def
+}
+
 type InstanceMap = map[InstanceID]ObjectInstance
 
 type InstanceIdsMap = map[ObjectID][]InstanceID

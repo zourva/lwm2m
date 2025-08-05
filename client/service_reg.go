@@ -16,7 +16,7 @@ const (
 	defaultLifetime          = 2592000   //30 days = 3600 * 24 * 30 seconds
 	defInitRegistrationDelay = 0         // Initial Registration Delay Timer, seconds
 	defCommRetryCount        = 5         // Communication Retry Count, attempts within a retry sequence
-	defCommRetryTimer        = 60        // Communication Retry Timer, seconds
+	defCommRetryTimer        = 1         // Communication Retry Timer, seconds
 	defCommSeqDelayTimer     = 24 * 3600 // Communication Sequence Delay Timer
 	defCommSeqRetryCount     = 1         // Communication Sequence Retry Count
 )
