@@ -194,49 +194,62 @@ func (s *coapServer) newTcpConnCallback(cc *tcpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
 
-	if s.tlsConf != nil {
-		state := cc.NetConn().(*tls.Conn).ConnectionState()
-		if state.PeerCertificates != nil { // certificate mode
-			clientCert := state.PeerCertificates[0]
-			if len(clientCert.Subject.CommonName) != 0 {
-				cc.SetContextValue(keyClientSecurityIdentity, clientCert.Subject.CommonName)
-			}
-		} else { // psk mode or raw public key mode
-			log.Fatalf("TLS must have common name provided")
-			//log.Warnf("TLS must have common name provided")
-		}
-	}
-
 	cc.AddOnClose(func() {
 		log.Infof("connection released: %s-%p", cc.RemoteAddr().String(), cc)
 		s.conns.Delete(cc.RemoteAddr().String())
 	})
+
+	if s.tlsConf != nil {
+		state := cc.NetConn().(*tls.Conn).ConnectionState()
+		commonName := ""
+		if state.PeerCertificates != nil { // certificate mode
+			clientCert := state.PeerCertificates[0]
+			commonName = clientCert.Subject.CommonName
+		} else { // psk mode or raw public key mode
+			//log.Fatalf("TLS must have common name provided")
+			log.Warnf("TLS peer certificate must be provided")
+		}
+
+		if len(commonName) > 0 {
+			cc.SetContextValue(keyClientSecurityIdentity, commonName)
+		} else {
+			log.Warnf("TLS must have common name provided, close the connection:%s-%p", cc.RemoteAddr().String(), cc)
+			_ = cc.Close()
+		}
+	}
 }
 
 func (s *coapServer) newUdpConnCallback(cc *udpclt.Conn) {
 	s.conns.Store(cc.RemoteAddr().String(), cc)
 	log.Infof("connection accepted: %s-%p", cc.RemoteAddr().String(), cc)
 
-	// save  if dtls enabled
-	if s.dtlsConf != nil {
-		state := cc.NetConn().(*piondtls.Conn).ConnectionState()
-		if state.PeerCertificates != nil { // certificate mode
-			if clientCert, err := x509.ParseCertificate(state.PeerCertificates[0]); err == nil {
-				if len(clientCert.Subject.CommonName) != 0 {
-					cc.SetContextValue(keyClientSecurityIdentity, clientCert.Subject.CommonName)
-				}
-			}
-		} else { // psk mode or raw public key mode
-			if state.IdentityHint != nil {
-				cc.SetContextValue(keyClientSecurityIdentity, state.IdentityHint)
-			}
-		}
-	}
-
 	cc.AddOnClose(func() {
 		log.Infof("connection released: %s-%p", cc.RemoteAddr().String(), cc)
 		s.conns.Delete(cc.RemoteAddr().String())
 	})
+
+	// save  if dtls enabled
+	if s.dtlsConf != nil {
+		state := cc.NetConn().(*piondtls.Conn).ConnectionState()
+		commonName := ""
+		if state.PeerCertificates != nil { // certificate mode
+			if clientCert, err := x509.ParseCertificate(state.PeerCertificates[0]); err == nil {
+				commonName = clientCert.Subject.CommonName
+			}
+		} else { // psk mode or raw public key mode
+			if state.IdentityHint != nil {
+				//cc.SetContextValue(keyClientSecurityIdentity, state.IdentityHint)
+				commonName = string(state.IdentityHint)
+			}
+		}
+
+		if len(commonName) > 0 {
+			cc.SetContextValue(keyClientSecurityIdentity, commonName)
+		} else {
+			log.Warnf("DTLS must have common name provided, close the connection:%s-%p", cc.RemoteAddr().String(), cc)
+			_ = cc.Close()
+		}
+	}
 }
 
 func (s *coapServer) serveUdp() error {
