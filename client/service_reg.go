@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	defaultLifetime          = 2592000   //30 days = 3600 * 24 * 30 seconds
-	defInitRegistrationDelay = 0         // Initial Registration Delay Timer, seconds
-	defCommRetryCount        = 5         // Communication Retry Count, attempts within a retry sequence
-	defCommRetryTimer        = 1         // Communication Retry Timer, seconds
-	defCommSeqDelayTimer     = 24 * 3600 // Communication Sequence Delay Timer
-	defCommSeqRetryCount     = 1         // Communication Sequence Retry Count
+	defaultLifetime          = 2592000 //30 days = 3600 * 24 * 30 seconds
+	defInitRegistrationDelay = 0       // Initial Registration Delay Timer, seconds
+	defCommRetryCount        = 4       // Communication Retry Count, attempts within a retry sequence
+	defCommRetryTimer        = 1       // Communication Retry Timer, seconds
+	defCommSeqDelayTimer     = 30      // Communication Sequence Delay Timer
+	defCommSeqRetryCount     = 1       // Communication Sequence Retry Count
 )
 
 // regServerInfo defines tracking info
@@ -45,7 +45,9 @@ type regServerInfo struct {
 func (r *regServerInfo) backoff() uint64 {
 	//r.exponential <<= r.retryCount - 1
 	//	return r.commRetryDelay * r.exponential
-	return r.commRetryDelay * uint64(math.Pow(2, float64(r.retryCount))-1)
+	delay := r.commRetryDelay * uint64(math.Pow(2, float64(r.retryCount))-1)
+	log.Warnf("backoff delay %d seconds for retry %d", delay, r.retryCount)
+	return delay
 }
 
 func (r *regServerInfo) reset() {
@@ -264,9 +266,12 @@ func (r *Registrar) onRegistering(_ any) {
 
 	// retry sequence exhausted
 	if server.blocking {
+		server.retrySequences++
 		if server.retrySequences <= server.commSeqRetryLimit {
 			//starts a new retry sequence to current blocked server
 			r.nextDelay = server.commSeqRetryDelay
+			log.Warnf("retry sequence %d exhausted, retrying to the same server %s after %d seconds",
+				server.retrySequences, server.address, r.nextDelay)
 			return
 		} else {
 			if server.bootstrap {

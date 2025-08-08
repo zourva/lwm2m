@@ -349,6 +349,7 @@ func (c *LwM2MClient) onRegistering(_ any) {
 		//restart registration if timeout
 		if c.registrar.Timeout() {
 			c.registrar.Stop()
+			c.registrar = nil // reset registrar to nil
 			c.initiateBootstrap(bootstrapReasonRegFail)
 			log.Infof("client register timeout, retry bootstrapping")
 		}
