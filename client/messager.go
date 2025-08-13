@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"github.com/plgd-dev/go-coap/v3/message/codes"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
@@ -112,7 +113,7 @@ func (m *MessagerClient) Start() {
 	//	log.Errorln("err received:", err)
 	//})
 	router := m.Router()
-	router.Use(m.logInterceptor)
+	router.Use(m.verifyInterceptor, m.logInterceptor)
 
 	// for device control interface methods
 	_ = m.Get("/{oid:[0-9]+}/{oiid:[0-9]+}/{rid:[0-9]+}/{riid:[0-9]+}", m.onServerRead)
@@ -318,6 +319,18 @@ func (m *MessagerClient) logInterceptor(next coap.Interceptor) coap.Interceptor 
 		//
 		//	}
 		//}
+		next.ServeCOAP(w, r)
+	})
+}
+
+func (m *MessagerClient) verifyInterceptor(next coap.Interceptor) coap.Interceptor {
+	return coap.Handler(func(w coap.ResponseWriter, r *coap.Message) {
+		if r.Code() == codes.NotFound {
+			log.Errorf("recv invalid msg from %v, content: %v, close it!", w.Conn().RemoteAddr(), r.String())
+			_ = w.Conn().Close()
+			return
+		}
+
 		next.ServeCOAP(w, r)
 	})
 }

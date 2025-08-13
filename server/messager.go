@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/plgd-dev/go-coap/v3/message/codes"
 	log "github.com/sirupsen/logrus"
 	"github.com/zourva/lwm2m/coap"
 	. "github.com/zourva/lwm2m/core"
@@ -42,7 +43,7 @@ func NewMessager(s *LwM2MServer) *MessagerServer {
 		address:     s.address,
 	}
 
-	m.Router().Use(m.logInterceptor)
+	m.Router().Use(m.verifyInterceptor, m.logInterceptor)
 
 	return m
 }
@@ -519,13 +520,19 @@ func (m *MessagerServer) statsInterceptor(next coap.Interceptor) coap.Intercepto
 
 func (m *MessagerServer) logInterceptor(next coap.Interceptor) coap.Interceptor {
 	return coap.Handler(func(w coap.ResponseWriter, r *coap.Message) {
-		//if r.Code() != codes.NotFound {
 		log.Tracef("recv msg from %v, content: %v", w.Conn().RemoteAddr(), r.String())
-		//} else {
-		//	if r.Code() == codes.NotFound {
-		//
-		//	}
-		//}
+		next.ServeCOAP(w, r)
+	})
+}
+
+func (m *MessagerServer) verifyInterceptor(next coap.Interceptor) coap.Interceptor {
+	return coap.Handler(func(w coap.ResponseWriter, r *coap.Message) {
+		if r.Code() == codes.NotFound {
+			log.Errorf("recv invalid msg from %v, content: %v, close it!", w.Conn().RemoteAddr(), r.String())
+			_ = w.Conn().Close()
+			return
+		}
+
 		next.ServeCOAP(w, r)
 	})
 }
