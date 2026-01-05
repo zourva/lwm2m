@@ -3,13 +3,14 @@ package client
 import (
 	"bytes"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	. "github.com/zourva/lwm2m/core"
-	"github.com/zourva/pareto/box/meta"
 	"math"
 	"sort"
 	"sync/atomic"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	. "github.com/zourva/lwm2m/core"
+	"github.com/zourva/pareto/box/meta"
 )
 
 const (
@@ -102,31 +103,37 @@ type Registrar struct {
 	messager *MessagerClient
 	//messagers []*MessagerClient
 
-	regInfo   *regInfo
-	servers   []*regServerInfo
-	current   int
-	nextDelay uint64
+	regInfo *regInfo
+	servers []*regServerInfo
+	current int
 
 	fail atomic.Bool
 
 	// update
 	timer    *time.Timer
 	duration time.Duration //update duration
+
+	initReadyAt  time.Time
+	retryReadyAt time.Time
 }
 
-func NewRegistrar(client *LwM2MClient) *Registrar {
+func NewRegistrar(client *LwM2MClient) (*Registrar, error) {
+	servers := client.getRegistrationServers()
+	if len(servers) == 0 {
+		return nil, fmt.Errorf("no registration server configured")
+	}
+
 	s := &Registrar{
 		StateMachine: meta.NewStateMachine[state]("registrar", time.Second),
 		client:       client,
 		//messager:     client.messager,
-		nextDelay: 0,
-		current:   0,
-		duration:  time.Second * 15,
+		current:  0,
+		duration: time.Second * 15,
 	}
 
 	s.timer = time.NewTimer(s.duration)
 	s.timer.Stop() //stop to wait for rescheduling
-	s.servers = client.getRegistrationServers()
+	s.servers = servers
 	s.regInfo = &regInfo{
 		name:     client.name,
 		lifetime: defaultLifetime, //delay init to lifetime of selected server
@@ -141,7 +148,7 @@ func NewRegistrar(client *LwM2MClient) *Registrar {
 		{Name: exiting, Action: s.onExiting},
 	})
 
-	return s
+	return s, nil
 }
 
 func (r *Registrar) singleObjectInst(oid ObjectID) ObjectInstance {
@@ -160,17 +167,9 @@ func (r *Registrar) currentServer() *regServerInfo {
 	return r.servers[r.current]
 }
 
-func (r *Registrar) hasMoreServers() bool {
-	return r.current < len(r.servers)-1
-}
-
 func (r *Registrar) selectNextServer() {
 	r.current += 1
 	r.current %= len(r.servers)
-}
-
-func (r *Registrar) addDelay(delaySec uint64) {
-	time.Sleep(time.Duration(delaySec) * time.Second)
 }
 
 func (r *Registrar) buildObjectInstancesList() string {
@@ -188,6 +187,53 @@ func (r *Registrar) buildObjectInstancesList() string {
 	}
 
 	return buf.String()
+}
+
+func (r *Registrar) readyForRegister() bool {
+	if r.retryReadyAt.IsZero() {
+		return true
+	}
+
+	if time.Until(r.retryReadyAt) <= 0 {
+		r.retryReadyAt = time.Time{}
+		return true
+	}
+
+	return false
+}
+
+func (r *Registrar) scheduleRetry(delaySec uint64) {
+	if delaySec == 0 {
+		r.retryReadyAt = time.Time{}
+		return
+	}
+
+	r.retryReadyAt = time.Now().Add(time.Duration(delaySec) * time.Second)
+}
+
+func (r *Registrar) clearScheduleRetry() {
+	r.retryReadyAt = time.Time{}
+}
+
+func (r *Registrar) initDelayElapsed(delaySec uint64) bool {
+	if delaySec <= 0 {
+		r.initReadyAt = time.Time{}
+		return true
+	}
+
+	delay := time.Duration(delaySec) * time.Second
+	if r.initReadyAt.IsZero() {
+		r.initReadyAt = time.Now().Add(delay)
+		log.Debugf("initial registration delayed by %s", delay)
+		return false
+	}
+
+	if time.Until(r.initReadyAt) > 0 {
+		return false
+	}
+
+	r.initReadyAt = time.Time{}
+	return true
 }
 
 func (r *Registrar) enablePeriodicUpdate() {
@@ -219,18 +265,19 @@ func (r *Registrar) Timeout() bool {
 }
 
 func (r *Registrar) onInitiating(_ any) {
-	r.sortServers()
 
-	// delay for "Initial Registration Delay Timer"
-	r.addDelay(r.currentServer().initRegDelay)
-
-	r.MoveToState(registering)
+	if r.initDelayElapsed(r.currentServer().initRegDelay) {
+		r.sortServers()
+		r.MoveToState(registering)
+	}
 }
 
 func (r *Registrar) onRegistering(_ any) {
-	server := r.currentServer()
-	r.addDelay(r.nextDelay)
+	if !r.readyForRegister() {
+		return
+	}
 
+	server := r.currentServer()
 	messager, err := dial(r.client, &server.ServerInfo)
 	if err == nil {
 		r.messager = messager
@@ -238,18 +285,11 @@ func (r *Registrar) onRegistering(_ any) {
 		err = r.Register()
 
 		if err == nil {
-
 			log.Infof("register to %s done", server.address)
-
-			if !r.hasMoreServers() {
-				r.MoveToState(registered)
-				r.enablePeriodicUpdate()
-				return
-			}
-
-			r.selectNextServer()
-			r.nextDelay = r.currentServer().initRegDelay
-			log.Infof("proceed with next server: %s", server.address)
+			server.reset()
+			r.clearScheduleRetry()
+			r.MoveToState(registered)
+			r.enablePeriodicUpdate()
 			return
 		}
 	}
@@ -260,7 +300,7 @@ func (r *Registrar) onRegistering(_ any) {
 	server.retryCount++
 	if server.retryCount <= server.commRetryLimit {
 		// update delay and try again within current retry sequence
-		r.nextDelay = server.backoff()
+		r.scheduleRetry(server.backoff())
 		return
 	}
 
@@ -269,9 +309,9 @@ func (r *Registrar) onRegistering(_ any) {
 		server.retrySequences++
 		if server.retrySequences <= server.commSeqRetryLimit {
 			//starts a new retry sequence to current blocked server
-			r.nextDelay = server.commSeqRetryDelay
+			r.scheduleRetry(server.commSeqRetryDelay)
 			log.Warnf("retry sequence %d exhausted, retrying to the same server %s after %d seconds",
-				server.retrySequences, server.address, r.nextDelay)
+				server.retrySequences, server.address, server.commSeqRetryDelay)
 			return
 		} else {
 			if server.bootstrap {
@@ -282,6 +322,7 @@ func (r *Registrar) onRegistering(_ any) {
 
 			//server.reset()
 			// always initiate a new bootstrap when run out of retry sequences
+			r.MoveToState(exiting)
 			r.fail.Store(true)
 			log.Infoln("retry failed, a new bootstrap needed")
 			return
@@ -291,7 +332,7 @@ func (r *Registrar) onRegistering(_ any) {
 		r.selectNextServer()
 		next := r.currentServer()
 		next.reset()
-		r.nextDelay = next.initRegDelay
+		r.scheduleRetry(next.initRegDelay)
 		log.Infoln("retry nonblocking registration to next server", next)
 	}
 }

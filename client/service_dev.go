@@ -118,10 +118,10 @@ func (d *DeviceController) OnCreate(specifyOId core.ObjectID, newValue []byte) e
 }
 
 func (d *DeviceController) errorConvert(value []byte, err error) ([]byte, error) {
-	if err == nil {
-		return value, err
+	if err != nil {
+		return nil, err
 	}
-	return value, core.InternalServerError
+	return value, nil
 }
 
 func (d *DeviceController) OnRead(oid core.ObjectID, instId core.InstanceID, resId core.ResourceID, resInstId core.InstanceID) ([]byte, error) {
@@ -255,10 +255,10 @@ func (d *DeviceController) OnDelete(oid core.ObjectID, instId core.InstanceID, r
 	err = instance.Class().Operator().Delete(instance, resId, resInstId)
 	if err != nil {
 		log.Warnf("delete failed:%v", err)
-		return core.InternalServerError
+		return err
 	}
 
-	if resId == core.NoneID || resInstId == core.NoneID {
+	if resId == core.NoneID && resInstId == core.NoneID {
 		_ = objs.Delete(instId)
 	}
 

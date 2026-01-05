@@ -29,7 +29,6 @@ type MessagerClient struct {
 
 	// service layer delegator
 	deviceCtrlDelegator DeviceControlClient
-	bootstrapDelegator  BootstrapClient
 	reporterDelegator   ReportingClient
 }
 
@@ -42,7 +41,6 @@ func NewMessager(c *LwM2MClient) *MessagerClient {
 	}
 
 	m.deviceCtrlDelegator = c.controller
-	m.bootstrapDelegator = c.bootstrapper
 	m.reporterDelegator = c.reporter
 
 	return m
@@ -149,7 +147,7 @@ func (m *MessagerClient) muted() bool {
 }
 
 func (m *MessagerClient) bootstrapper() BootstrapClient {
-	return m.bootstrapDelegator
+	return m.lwM2MClient.bootstrapper
 }
 
 func (m *MessagerClient) devController() DeviceControlClient {

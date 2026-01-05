@@ -172,7 +172,8 @@ func (c *LwM2MClient) getBootstrapInfos() (*BootstrapServerBootstrapInfo, *Serve
 			network, address, secured := c.getBearerFromURISchema(uri)
 			if (secured && securityMode == SecurityModeNoSec) ||
 				(!secured && securityMode != SecurityModeNoSec) {
-				log.Fatalln("security mode conflicts with bootstrap server uri schema:", uri)
+				log.Errorf("security mode conflicts with bootstrap server uri schema: %s", uri)
+				continue
 			}
 
 			serverInfo := &ServerInfo{
@@ -213,7 +214,8 @@ func (c *LwM2MClient) getRegistrationServers() []*regServerInfo {
 			network, address, secured := c.getBearerFromURISchema(uri)
 			if (secured && securityMode == SecurityModeNoSec) ||
 				(!secured && securityMode != SecurityModeNoSec) {
-				log.Fatalln("security mode conflicts with server uri schema:", uri)
+				log.Errorf("security mode conflicts with server uri schema: %s", uri)
+				continue
 			}
 
 			ms[shortId] = &regServerInfo{
@@ -276,6 +278,11 @@ func (c *LwM2MClient) doBootstrap() {
 	//c.messager().PauseUserPlane()
 
 	bootstrapInfo, serverInfo := c.getBootstrapInfos()
+	if serverInfo == nil {
+		log.Errorln("no bootstrap server configured, abort bootstrap")
+		c.evtMgr.EmitEvent(EventClientAbnormal)
+		return
+	}
 
 	// always create a new bootstrapper
 	opts := []BootstrapOption{
@@ -300,7 +307,13 @@ func (c *LwM2MClient) doRegister() {
 	if c.registrar != nil {
 		c.registrar.Stop()
 	}
-	c.registrar = NewRegistrar(c)
+	registrar, err := NewRegistrar(c)
+	if err != nil {
+		log.Errorf("create registrar failed: %v", err)
+		c.initiateBootstrap(bootstrapReasonRegFail)
+		return
+	}
+	c.registrar = registrar
 	c.registrar.Start()
 
 	c.machine.MoveToState(registering)
