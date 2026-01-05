@@ -14,7 +14,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 	github.com/vmihailenco/msgpack/v5 v5.3.5
-	github.com/zourva/pareto v0.3.1-0.20250218161848-abc67434031a
+	github.com/zourva/pareto v0.3.1-0.20260105114912-8a9bd04447be
 	go.etcd.io/bbolt v1.4.0
 )
 
