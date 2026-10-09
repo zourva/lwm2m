@@ -40,7 +40,7 @@ func (d *DefaultEventObserver) Registered(c core.RegisteredClient) {
 }
 
 func (d *DefaultEventObserver) Updated(c core.RegisteredClient) {
-	log.Infof("registration inof of client %s is updated", c.Name())
+	log.Infof("registration info of client %s is updated", c.Name())
 	return
 }
 

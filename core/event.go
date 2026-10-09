@@ -30,6 +30,8 @@ const (
 	EventServerStopped
 )
 
+const DummyMsg = ""
+
 type Event interface {
 	// Name returns name of this event.
 	Name() string
@@ -70,15 +72,10 @@ func optString(opt, def string) string {
 	return def
 }
 
-func NewBaseEvent(evt EventType, defName, defMsg string, args ...string) *BaseEvent {
-	name := defName
-	if len(args) >= 1 {
-		name = optString(args[0], defName)
-	}
-
+func NewBaseEvent(evt EventType, name, defMsg, userMsg string) *BaseEvent {
 	msg := defMsg
-	if len(args) >= 2 {
-		msg = optString(args[1], defMsg)
+	if len(userMsg) >= 0 {
+		msg = userMsg
 	}
 
 	return &BaseEvent{
@@ -89,10 +86,8 @@ func NewBaseEvent(evt EventType, defName, defMsg string, args ...string) *BaseEv
 }
 
 // EventGenerator
-//
-//	name: args[0]
-//	msg: args[1]
-type EventGenerator func(args ...string) Event
+// userMsg optional
+type EventGenerator func(userMsg string) Event
 
 type EventManager struct {
 	listeners map[EventType]EventHandler
@@ -113,9 +108,9 @@ func (em *EventManager) AddListener(et EventType, h EventHandler) {
 }
 
 // EmitEvent triggers the callback registered on evt.
-func (em *EventManager) EmitEvent(evt EventType, args ...any) {
+func (em *EventManager) EmitEvent(evt EventType, msg string) {
 	if handler, ok := em.listeners[evt]; ok {
-		handler(em.createEvent(evt, args...))
+		handler(em.createEvent(evt, msg))
 	}
 }
 
@@ -123,9 +118,9 @@ func (em *EventManager) RegisterCreator(evt EventType, gen EventGenerator) {
 	em.creators[evt] = gen
 }
 
-func (em *EventManager) createEvent(evt EventType, args ...any) Event {
+func (em *EventManager) createEvent(evt EventType, msg string) Event {
 	if creator, ok := em.creators[evt]; ok {
-		return creator()
+		return creator(msg)
 	}
 
 	log.Errorln("event is not supported in client side:", evt)

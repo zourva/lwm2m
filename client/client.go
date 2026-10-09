@@ -280,7 +280,7 @@ func (c *LwM2MClient) doBootstrap() {
 	bootstrapInfo, serverInfo := c.getBootstrapInfos()
 	if serverInfo == nil {
 		log.Errorln("no bootstrap server configured, abort bootstrap")
-		c.evtMgr.EmitEvent(EventClientAbnormal)
+		c.evtMgr.EmitEvent(EventClientAbnormal, "bootstrap server config")
 		return
 	}
 
@@ -338,15 +338,16 @@ func (c *LwM2MClient) onInitiating(_ any) {
 func (c *LwM2MClient) onBootstrapping(_ any) {
 	if c.bootstrapper.Bootstrapped() {
 		log.Infoln("client bootstrapped")
-		c.evtMgr.EmitEvent(EventClientBootstrapped)
+		c.evtMgr.EmitEvent(EventClientBootstrapped, DummyMsg)
 		c.bootstrapper.Stop()
 		c.doRegister()
 	} else {
 		//restart bootstrap if timeout
 		if c.bootstrapper.Timeout() {
 			c.bootstrapper.Stop()
+			c.evtMgr.EmitEvent(EventClientAbnormal, "bootstrap timeout")
 			c.initiateBootstrap(bootstrapReasonBootFail)
-			log.Infof("client bootstrap timeout, retry")
+			log.Warnf("client bootstrap timeout, retry")
 		}
 	}
 }
@@ -354,7 +355,7 @@ func (c *LwM2MClient) onBootstrapping(_ any) {
 func (c *LwM2MClient) onRegistering(_ any) {
 	if c.registrar.Registered() {
 		log.Infoln("client registered")
-		c.evtMgr.EmitEvent(EventClientRegistered)
+		c.evtMgr.EmitEvent(EventClientRegistered, DummyMsg)
 		// registrar is long-running, so not stopped
 		//c.registrar.Stop()
 		c.enableService()
@@ -363,8 +364,9 @@ func (c *LwM2MClient) onRegistering(_ any) {
 		if c.registrar.Timeout() {
 			c.registrar.Stop()
 			c.registrar = nil // reset registrar to nil
+			c.evtMgr.EmitEvent(EventClientAbnormal, "register timeout")
 			c.initiateBootstrap(bootstrapReasonRegFail)
-			log.Infof("client register timeout, retry bootstrapping")
+			log.Warnf("client register timeout, retry bootstrapping")
 		}
 	}
 }
@@ -392,19 +394,25 @@ func (c *LwM2MClient) onServicing(_ any) {
 		log.Errorf("client reported failure(%d) times exceed %d, "+
 			"enter the re-registration process.", failed, 3)
 		c.reporter.resetFailCounter()
+		c.evtMgr.EmitEvent(EventClientAbnormal, "report retry failed")
 		c.initiateRegister()
 		return
 	}
 }
 
 func (c *LwM2MClient) onExiting(_ any) {
+	if c.registrar == nil || c.messagerc == nil {
+		return
+	}
+
 	if err := c.registrar.Deregister(); err != nil {
 		log.Errorln("client unregister failed:", err)
+		c.evtMgr.EmitEvent(EventClientAbnormal, "deregister failed:"+err.Error())
 		return
 	}
 
 	log.Infoln("client is unregistered")
-	c.evtMgr.EmitEvent(EventClientUnregistered)
+	c.evtMgr.EmitEvent(EventClientUnregistered, DummyMsg)
 	c.registrar.Stop()
 }
 
@@ -468,7 +476,20 @@ func (c *LwM2MClient) Start() bool {
 }
 
 func (c *LwM2MClient) Stop() {
-	//c.messager().Stop()
+	if c.messagerc != nil {
+		// stop messager first to prevent
+		// suspending of loopWG.Wait() in machine.Shutdown()
+		_ = c.messagerc.Close()
+	}
+
+	if c.registrar != nil {
+		c.registrar.Stop()
+	}
+
+	if c.bootstrapper != nil {
+		c.bootstrapper.Stop()
+	}
+
 	c.machine.Shutdown()
 	_ = c.store.StorageManager().Close()
 }

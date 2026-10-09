@@ -6,9 +6,9 @@ type StartedEvent struct {
 	*BaseEvent
 }
 
-func NewServerStartedEvent(args ...string) Event {
+func NewServerStartedEvent(args string) Event {
 	return &StartedEvent{
-		BaseEvent: NewBaseEvent(EventServerStarted, "server started", "", args...),
+		BaseEvent: NewBaseEvent(EventServerStarted, "server started", "", args),
 	}
 }
 
@@ -16,9 +16,9 @@ type StoppedEvent struct {
 	*BaseEvent
 }
 
-func NewServerStoppedEvent(args ...string) Event {
+func NewServerStoppedEvent(args string) Event {
 	return &StoppedEvent{
-		BaseEvent: NewBaseEvent(EventServerStopped, "server stopped", "", args...),
+		BaseEvent: NewBaseEvent(EventServerStopped, "server stopped", "", args),
 	}
 }
 
@@ -26,9 +26,9 @@ type ClientBootstrappedEvent struct {
 	*BaseEvent
 }
 
-func NewClientBootstrappedEvent(args ...string) Event {
+func NewClientBootstrappedEvent(args string) Event {
 	return &ClientBootstrappedEvent{
-		BaseEvent: NewBaseEvent(EventClientBootstrapped, "client bootstrapped", "", args...),
+		BaseEvent: NewBaseEvent(EventClientBootstrapped, "client bootstrapped", "", args),
 	}
 }
 
@@ -36,9 +36,9 @@ type ClientRegisteredEvent struct {
 	*BaseEvent
 }
 
-func NewClientRegisteredEvent(args ...string) Event {
+func NewClientRegisteredEvent(args string) Event {
 	return &ClientRegisteredEvent{
-		BaseEvent: NewBaseEvent(EventClientRegistered, "client registered", "", args...),
+		BaseEvent: NewBaseEvent(EventClientRegistered, "client registered", "", args),
 	}
 }
 
@@ -46,9 +46,9 @@ type ClientRegUpdatedEvent struct {
 	*BaseEvent
 }
 
-func NewClientRegUpdatedEvent(args ...string) Event {
+func NewClientRegUpdatedEvent(args string) Event {
 	return &ClientRegUpdatedEvent{
-		BaseEvent: NewBaseEvent(EventClientRegUpdated, "client registration updated", "", args...),
+		BaseEvent: NewBaseEvent(EventClientRegUpdated, "client registration updated", "", args),
 	}
 }
 
@@ -56,8 +56,8 @@ type ClientUnregisteredEvent struct {
 	*BaseEvent
 }
 
-func NewClientUnregisteredEvent(args ...string) Event {
+func NewClientUnregisteredEvent(args string) Event {
 	return &ClientUnregisteredEvent{
-		BaseEvent: NewBaseEvent(EventClientUnregistered, "client unregistered", "", args...),
+		BaseEvent: NewBaseEvent(EventClientUnregistered, "client unregistered", "", args),
 	}
 }
